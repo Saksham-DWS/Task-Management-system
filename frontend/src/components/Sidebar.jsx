@@ -1,0 +1,128 @@
+import { NavLink } from 'react-router-dom'
+import { 
+  LayoutDashboard, 
+  FolderKanban, 
+  ListTodo, 
+  Users, 
+  LineChart, 
+  FileBarChart, 
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+  Sun,
+  Moon,
+  LogOut
+} from 'lucide-react'
+import { useUIStore } from '../store/ui.store'
+import { useAccess } from '../hooks/useAccess'
+import { useAuth } from '../hooks/useAuth'
+
+const navItems = [
+  { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { path: '/categories', icon: FolderKanban, label: 'Categories' },
+  { path: '/my-work', icon: ListTodo, label: 'My Work' },
+  { path: '/teams', icon: Users, label: 'Teams & Access', requiresManager: true },
+  { path: '/insights', icon: LineChart, label: 'Insights' },
+  { path: '/reports', icon: FileBarChart, label: 'Reports' },
+  { path: '/settings', icon: Settings, label: 'Settings' }
+]
+
+export default function Sidebar() {
+  const { sidebarOpen, toggleSidebar, darkMode, toggleDarkMode } = useUIStore()
+  const { isManager } = useAccess()
+  const { user, logout } = useAuth()
+
+  return (
+    <aside className={`${sidebarOpen ? 'w-64' : 'w-20'} bg-white dark:bg-[#0a0a0a] border-r border-gray-200 dark:border-gray-800 flex flex-col transition-all duration-300`}>
+      {/* Logo */}
+      <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-800">
+        {sidebarOpen && (
+          <div className="flex items-center gap-3">
+            {/* DWS Logo */}
+            <div className="w-10 h-10 bg-black dark:bg-white rounded-lg flex items-center justify-center">
+              <span className="text-white dark:text-black font-bold text-lg">D</span>
+            </div>
+            <div>
+              <h1 className="font-bold text-gray-900 dark:text-white">DWS</h1>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Digital Web Solutions</p>
+            </div>
+          </div>
+        )}
+        <button 
+          onClick={toggleSidebar}
+          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-400"
+        >
+          {sidebarOpen ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
+        </button>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 py-4 overflow-y-auto">
+        <ul className="space-y-1 px-3">
+          {navItems.map((item) => {
+            if (item.requiresManager && !isManager()) return null
+
+            return (
+              <li key={item.path}>
+                <NavLink
+                  to={item.path}
+                  className={({ isActive }) => `
+                    flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors
+                    ${isActive 
+                      ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' 
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    }
+                  `}
+                  title={!sidebarOpen ? item.label : ''}
+                >
+                  <item.icon size={20} />
+                  {sidebarOpen && <span className="font-medium">{item.label}</span>}
+                </NavLink>
+              </li>
+            )
+          })}
+        </ul>
+      </nav>
+
+      {/* Bottom Section */}
+      <div className="p-3 border-t border-gray-200 dark:border-gray-800 space-y-2">
+        {/* Dark Mode Toggle */}
+        <button
+          onClick={toggleDarkMode}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg w-full text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+        >
+          {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+          {sidebarOpen && <span className="font-medium">{darkMode ? 'Light Mode' : 'Dark Mode'}</span>}
+        </button>
+
+        {/* User Info */}
+        {sidebarOpen && user && (
+          <div className="flex items-center gap-3 px-3 py-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold text-sm">
+              {user.name?.charAt(0).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                {user.name}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">
+                {user.role}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Logout */}
+        <button
+          onClick={logout}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg w-full text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+          title="Logout"
+        >
+          <LogOut size={20} />
+          {sidebarOpen && <span className="font-medium">Logout</span>}
+        </button>
+      </div>
+    </aside>
+  )
+}
