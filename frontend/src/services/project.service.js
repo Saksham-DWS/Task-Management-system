@@ -24,8 +24,13 @@ const normalizeProject = (project) => {
   if (!project) return project
   const startDate = project.startDate || project.start_date || null
   const endDate = project.endDate || project.end_date || project.dueDate || project.due_date || null
+  const accessUserIds = project.accessUserIds || project.access_user_ids || []
   return {
     ...project,
+    weeklyGoals: project.weeklyGoals || project.weekly_goals || [],
+    accessUserIds,
+    accessUsers: project.accessUsers || project.access_users || [],
+    collaboratorIds: project.collaboratorIds || project.collaborator_ids || [],
     startDate,
     endDate,
     categoryId: project.categoryId || project.category_id,
@@ -69,6 +74,8 @@ export const projectService = {
       name: projectData.name,
       description: projectData.description,
       category_id: projectData.categoryId,
+      accessUserIds: projectData.accessUserIds || [],
+      collaboratorIds: projectData.collaborators || projectData.collaboratorIds || [],
       status: statusToBackend[projectData.status] || projectData.status,
       startDate: formatDateForBackend(normalizeInputDate(projectData.startDate)),
       endDate: formatDateForBackend(normalizeInputDate(projectData.endDate)),
@@ -84,6 +91,12 @@ export const projectService = {
       ...projectData,
       status: statusToBackend[projectData.status] || projectData.status
     }
+    if (projectData.accessUserIds !== undefined) {
+      payload.accessUserIds = projectData.accessUserIds
+    }
+    if (projectData.collaborators !== undefined || projectData.collaboratorIds !== undefined) {
+      payload.collaboratorIds = projectData.collaborators || projectData.collaboratorIds || []
+    }
     if (projectData.startDate !== undefined) {
       payload.startDate = formatDateForBackend(normalizeInputDate(projectData.startDate))
       payload.start_date = payload.startDate
@@ -93,7 +106,20 @@ export const projectService = {
       payload.end_date = payload.endDate
     }
     const response = await api.put(`/projects/${id}`, payload)
-    return normalizeProject(response.data)
+    const updated = normalizeProject(response.data)
+
+    // Ensure access is persisted even if the main update omitted it
+    if (projectData.accessUserIds !== undefined) {
+      try {
+        const accessResp = await api.put(`/projects/${id}/access`, { accessUserIds: projectData.accessUserIds })
+        return normalizeProject(accessResp.data)
+      } catch (err) {
+        // Fallback to the earlier response if access update fails
+        return updated
+      }
+    }
+
+    return updated
   },
 
   delete: async (id, force = false) => {
@@ -113,6 +139,26 @@ export const projectService = {
 
   updateAchievements: async (id, achievements) => {
     const response = await api.put(`/projects/${id}/achievements`, { achievements })
+    return response.data
+  },
+
+  addGoal: async (id, text) => {
+    const response = await api.post(`/projects/${id}/goals`, { text })
+    return normalizeProject(response.data)
+  },
+
+  addAchievement: async (id, goalId, text) => {
+    const response = await api.post(`/projects/${id}/goals/${goalId}/achievements`, { text })
+    return normalizeProject(response.data)
+  },
+
+  getComments: async (id) => {
+    const response = await api.get(`/projects/${id}/comments`)
+    return response.data
+  },
+
+  addComment: async (id, content, attachments = [], parentId = null) => {
+    const response = await api.post(`/projects/${id}/comments`, { content, attachments, parent_id: parentId })
     return response.data
   },
 

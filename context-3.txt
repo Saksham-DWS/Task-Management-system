@@ -1,0 +1,11 @@
+New Goal Context a feature addtion in the system which will be work and in sync with UI frontend with backend and Backend
+DB
+
+
+
+1. New Feature i wanted to add is AI Insights generation at Project level and at the admin insight panel level
+
+-At Project level each Project insights will be Generated 
+-And At Admin panel of Insights level full categories > Projects > and there related task level insights will be generated
+
+

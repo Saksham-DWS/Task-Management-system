@@ -1,7 +1,9 @@
+import { useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
 import { 
   LayoutDashboard, 
   FolderKanban, 
+  Briefcase,
   ListTodo, 
   Users, 
   LineChart, 
@@ -9,28 +11,37 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Sun,
-  Moon,
   LogOut
 } from 'lucide-react'
 import { useUIStore } from '../store/ui.store'
 import { useAccess } from '../hooks/useAccess'
 import { useAuth } from '../hooks/useAuth'
 
-const navItems = [
-  { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { path: '/categories', icon: FolderKanban, label: 'Categories' },
-  { path: '/my-work', icon: ListTodo, label: 'My Work' },
-  { path: '/teams', icon: Users, label: 'Teams & Access', requiresManager: true },
-  { path: '/insights', icon: LineChart, label: 'Insights' },
-  { path: '/reports', icon: FileBarChart, label: 'Reports' },
-  { path: '/settings', icon: Settings, label: 'Settings' }
-]
-
 export default function Sidebar() {
-  const { sidebarOpen, toggleSidebar, darkMode, toggleDarkMode } = useUIStore()
-  const { isManager } = useAccess()
-  const { user, logout } = useAuth()
+  const { sidebarOpen, toggleSidebar } = useUIStore()
+  const { isManager, userAccess } = useAccess()
+  const { user, logout, refreshUser } = useAuth()
+
+  // Always refresh user/access on mount so newly granted project/category access appears
+  useEffect(() => {
+    refreshUser().catch(() => {})
+  }, [])
+
+  const categoryIds = userAccess?.categoryIds || userAccess?.category_ids || []
+  const projectIds = userAccess?.projectIds || userAccess?.project_ids || []
+  const hasCategoryAccess = isManager() || categoryIds.length > 0
+  const hasProjectAccess = isManager() || hasCategoryAccess || projectIds.length > 0
+
+  const navItems = [
+    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', show: true },
+    { path: '/categories', icon: FolderKanban, label: 'Categories', show: hasCategoryAccess },
+    { path: '/projects', icon: Briefcase, label: 'Projects', show: hasProjectAccess },
+    { path: '/my-work', icon: ListTodo, label: 'My Work', show: true },
+    { path: '/teams', icon: Users, label: 'Teams & Access', requiresManager: true, show: true },
+    { path: '/insights', icon: LineChart, label: 'Insights', show: true },
+    { path: '/reports', icon: FileBarChart, label: 'Reports', show: true },
+    { path: '/settings', icon: Settings, label: 'Settings', show: true }
+  ].filter((item) => item.show !== false)
 
   return (
     <aside className={`${sidebarOpen ? 'w-64' : 'w-20'} bg-white dark:bg-[#0a0a0a] border-r border-gray-200 dark:border-gray-800 flex flex-col transition-all duration-300`}>
@@ -86,16 +97,6 @@ export default function Sidebar() {
 
       {/* Bottom Section */}
       <div className="p-3 border-t border-gray-200 dark:border-gray-800 space-y-2">
-        {/* Dark Mode Toggle */}
-        <button
-          onClick={toggleDarkMode}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg w-full text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-          title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-        >
-          {darkMode ? <Sun size={20} /> : <Moon size={20} />}
-          {sidebarOpen && <span className="font-medium">{darkMode ? 'Light Mode' : 'Dark Mode'}</span>}
-        </button>
-
         {/* User Info */}
         {sidebarOpen && user && (
           <div className="flex items-center gap-3 px-3 py-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg">

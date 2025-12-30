@@ -2,6 +2,7 @@ export const TASK_STATUS = {
   NOT_STARTED: 'not_started',
   IN_PROGRESS: 'in_progress',
   HOLD: 'hold',
+  REVIEW: 'review',
   COMPLETED: 'completed'
 }
 
@@ -9,6 +10,7 @@ export const TASK_STATUS_ORDER = [
   TASK_STATUS.NOT_STARTED,
   TASK_STATUS.IN_PROGRESS,
   TASK_STATUS.HOLD,
+  TASK_STATUS.REVIEW,
   TASK_STATUS.COMPLETED
 ]
 
@@ -17,6 +19,8 @@ export const TASK_STATUS_ALIASES = {
   in_progress: TASK_STATUS.IN_PROGRESS,
   on_hold: TASK_STATUS.HOLD,
   hold: TASK_STATUS.HOLD,
+  in_review: TASK_STATUS.REVIEW,
+  review: TASK_STATUS.REVIEW,
   completed: TASK_STATUS.COMPLETED
 }
 
@@ -26,6 +30,7 @@ export const TASK_STATUS_LABELS = {
   [TASK_STATUS.NOT_STARTED]: 'Not Started',
   [TASK_STATUS.IN_PROGRESS]: 'In Progress',
   [TASK_STATUS.HOLD]: 'On Hold',
+  [TASK_STATUS.REVIEW]: 'Review',
   [TASK_STATUS.COMPLETED]: 'Completed'
 }
 
@@ -33,6 +38,7 @@ export const TASK_STATUS_COLORS = {
   [TASK_STATUS.NOT_STARTED]: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
   [TASK_STATUS.IN_PROGRESS]: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
   [TASK_STATUS.HOLD]: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+  [TASK_STATUS.REVIEW]: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
   [TASK_STATUS.COMPLETED]: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
 }
 

@@ -8,6 +8,7 @@ class TaskStatus(str, Enum):
     NOT_STARTED = "not_started"
     IN_PROGRESS = "in_progress"
     HOLD = "hold"
+    REVIEW = "review"
     COMPLETED = "completed"
 
 
@@ -28,6 +29,11 @@ class Goal(BaseModel):
     text: str
     status: str = "pending"  # pending, achieved, not_achieved
     created_at: Optional[datetime] = None
+    created_by_id: Optional[str] = None
+    created_by_name: Optional[str] = None
+    achieved_at: Optional[datetime] = None
+    achieved_by_id: Optional[str] = None
+    achieved_by_name: Optional[str] = None
 
 
 class Achievement(BaseModel):
@@ -136,6 +142,7 @@ class CommentBase(BaseModel):
 
 class CommentCreate(CommentBase):
     attachments: Optional[List[Attachment]] = []
+    parent_id: Optional[str] = None
 
 
 class CommentInDB(CommentBase):
@@ -143,6 +150,7 @@ class CommentInDB(CommentBase):
     task_id: str
     user_id: str
     created_at: datetime = datetime.utcnow()
+    parent_id: Optional[str] = None
 
     class Config:
         populate_by_name = True
@@ -153,6 +161,7 @@ class CommentResponse(CommentBase):
     task_id: str
     user: Optional[Any] = None
     created_at: datetime
+    parent_id: Optional[str] = None
 
     class Config:
         populate_by_name = True

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from bson import ObjectId
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List
 
 from ..database import (
@@ -8,7 +8,8 @@ from ..database import (
     get_projects_collection,
     get_users_collection,
     get_categories_collection,
-    get_comments_collection
+    get_comments_collection,
+    get_notifications_collection
 )
 from ..models import TaskCreate, TaskUpdate, CommentCreate, TaskStatus
 from ..services.auth import get_current_user
@@ -20,6 +21,7 @@ STATUS_ORDER = [
     TaskStatus.NOT_STARTED.value,
     TaskStatus.IN_PROGRESS.value,
     TaskStatus.HOLD.value,
+    TaskStatus.REVIEW.value,
     TaskStatus.COMPLETED.value
 ]
 
@@ -28,6 +30,8 @@ STATUS_ALIAS = {
     "in_progress": TaskStatus.IN_PROGRESS.value,
     "on_hold": TaskStatus.HOLD.value,
     "hold": TaskStatus.HOLD.value,
+    "in_review": TaskStatus.REVIEW.value,
+    "review": TaskStatus.REVIEW.value,
     "completed": TaskStatus.COMPLETED.value
 }
 
@@ -49,6 +53,38 @@ def is_forward_status(current_status: str, next_status: str) -> bool:
 def activity_timestamp() -> str:
     return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
+def dt_to_iso_z(value):
+    """Normalize datetime-like values to ISO string with explicit Z."""
+    if not value:
+        return None
+    if isinstance(value, str):
+        if value.endswith("Z") or value.endswith("z"):
+            return value
+        try:
+            # Try parsing and re-serializing to ensure consistency
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None, microsecond=0)
+            return parsed.isoformat() + "Z"
+        except Exception:
+            return value + "Z"
+    if isinstance(value, datetime):
+        if value.tzinfo:
+            value = value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value.replace(microsecond=0).isoformat() + "Z"
+    return None
+
+
+def status_label(status: str) -> str:
+    labels = {
+        TaskStatus.NOT_STARTED.value: "Not Started",
+        TaskStatus.IN_PROGRESS.value: "In Progress",
+        TaskStatus.HOLD.value: "On Hold",
+        TaskStatus.REVIEW.value: "Review",
+        TaskStatus.COMPLETED.value: "Completed"
+    }
+    return labels.get(status, status.replace("_", " ").title() if status else "")
+
+
 def build_activity_entry(description: str, current_user: dict) -> dict:
     return {
         "description": description,
@@ -56,6 +92,86 @@ def build_activity_entry(description: str, current_user: dict) -> dict:
         "user_id": current_user["_id"],
         "user": current_user.get("name", "Unknown")
     }
+
+
+def unique_participants(task: dict) -> set:
+    participants = set()
+    for key in ["assigned_by_id", "assignee_ids", "collaborator_ids"]:
+        value = task.get(key)
+        if isinstance(value, list):
+            participants.update([str(v) for v in value if v])
+        elif value:
+            participants.add(str(value))
+    return participants
+
+
+def next_goal_id(goals: list) -> int:
+    if not goals:
+        return 1
+    ids = []
+    for g in goals:
+        if isinstance(g, dict):
+            ids.append(g.get("id", 0))
+        else:
+            ids.append(getattr(g, "id", 0))
+    try:
+        return max(int(i) for i in ids) + 1
+    except Exception:
+        return len(goals) + 1
+
+
+async def notify_task_change(task: dict, actor: dict, message: str, event_type: str = "task_status", status: str = None, recipients: list = None):
+    notifications = get_notifications_collection()
+    if notifications is None:
+        return
+
+    target_ids = set([str(r) for r in (recipients or []) if r]) or unique_participants(task)
+    actor_id = str(actor.get("_id"))
+    documents = []
+    for uid in target_ids:
+        if uid == actor_id or not uid:
+            continue
+        documents.append({
+            "user_id": uid,
+            "message": message,
+            "task_id": str(task.get("_id", "")),
+            "project_id": task.get("project_id"),
+            "type": event_type,
+            "status": status,
+            "actor": {"id": actor_id, "name": actor.get("name")},
+            "read": False,
+            "created_at": datetime.utcnow()
+        })
+    if documents:
+        await notifications.insert_many(documents)
+
+
+async def is_task_reviewer(task: dict, current_user: dict) -> bool:
+    """Determine if the user can accept/decline review or mark completion."""
+    if not current_user or not task:
+        return False
+    user_id = str(current_user.get("_id"))
+    if task.get("assigned_by_id") == user_id:
+        return True
+    try:
+        if task.get("project_id"):
+            project = await get_projects_collection().find_one({"_id": ObjectId(task["project_id"])})
+            if project and str(project.get("owner_id")) == user_id:
+                return True
+    except Exception:
+        pass
+    return current_user.get("role") in ["admin", "manager"]
+
+
+def can_log_goal(task: dict, current_user: dict) -> bool:
+    """Allow goal logging by assignees (doers) and admins."""
+    if not current_user or not task:
+        return False
+    if current_user.get("role") == "admin":
+        return True
+    user_id = str(current_user.get("_id"))
+    assignees = task.get("assignee_ids") or []
+    return user_id in assignees
 
 async def fetch_user_names(user_ids: List[str]) -> List[str]:
     if not user_ids:
@@ -119,29 +235,33 @@ def normalize_activity_entries(activity_raw: list) -> list:
     return normalized
 
 async def check_project_auto_complete(project_id: str):
-    """Auto-complete project if no tasks in 'not_started' or 'in_progress'"""
+    """Auto-complete project if every task is completed."""
     tasks = get_tasks_collection()
-    
-    # Count tasks that are not completed or on hold
+    projects = get_projects_collection()
+
+    active_statuses = ["not_started", "in_progress", "hold", "review"]
     active_tasks = await tasks.count_documents({
         "project_id": project_id,
-        "status": {"$in": ["not_started", "in_progress"]}
+        "status": {"$in": active_statuses}
     })
-    
+
     total_tasks = await tasks.count_documents({"project_id": project_id})
-    
+
+    try:
+        project_filter = {"_id": ObjectId(project_id)}
+    except Exception:
+        project_filter = {"_id": project_id}
+
     if total_tasks > 0 and active_tasks == 0:
-        # All tasks are either completed or on hold - mark project as completed
         await projects.update_one(
-            {"_id": ObjectId(project_id)},
+            project_filter,
             {"$set": {"status": "completed", "updated_at": datetime.utcnow()}}
         )
     elif active_tasks > 0:
-        # Has active tasks - ensure project is ongoing
-        project = await projects.find_one({"_id": ObjectId(project_id)})
+        project = await projects.find_one(project_filter)
         if project and project.get("status") == "completed":
             await projects.update_one(
-                {"_id": ObjectId(project_id)},
+                project_filter,
                 {"$set": {"status": "ongoing", "updated_at": datetime.utcnow()}}
             )
 
@@ -221,7 +341,27 @@ async def populate_task(task: dict) -> dict:
         if datetime.utcnow() >= goals_created + timedelta(days=7):
             task["can_add_achievements"] = True
 
-    task["activity"] = normalize_activity_entries(task.get("activity", []))
+    activity_entries = normalize_activity_entries(task.get("activity", []))
+    def _activity_sort_key(item: dict):
+        ts = item.get("timestamp")
+        if not ts:
+            return datetime.min
+        try:
+            return datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        except Exception:
+            return datetime.min
+    task["activity"] = sorted(activity_entries, key=_activity_sort_key, reverse=True)
+
+    # Normalize goal timestamps to ISO Z for consistent client timezone handling
+    goals = task.get("weekly_goals") or []
+    normalized_goals = []
+    for g in goals:
+        if isinstance(g, dict):
+            g = dict(g)
+            g["created_at"] = dt_to_iso_z(g.get("created_at"))
+            g["achieved_at"] = dt_to_iso_z(g.get("achieved_at"))
+        normalized_goals.append(g)
+    task["weekly_goals"] = normalized_goals
     
     return task
 
@@ -308,7 +448,12 @@ async def create_task(
                 "id": i + 1,
                 "text": goal.text if hasattr(goal, 'text') else goal.get('text', ''),
                 "status": "pending",
-                "created_at": goals_created_at
+                "created_at": goals_created_at,
+                "created_by_id": current_user["_id"],
+                "created_by_name": current_user.get("name", "Unknown"),
+                "achieved_at": None,
+                "achieved_by_id": None,
+                "achieved_by_name": None
             })
     
     task_dict = {
@@ -375,6 +520,7 @@ async def update_task(
     incoming = {k: v for k, v in task_data.dict().items() if v is not None}
     if not incoming:
         raise HTTPException(status_code=400, detail="No data to update")
+    current_status = normalize_status(existing.get("status"))
 
     def normalize_datetime(value):
         if value is None:
@@ -403,17 +549,23 @@ async def update_task(
     def add_project_activity(description):
         project_activity_entries.append(build_activity_entry(description, current_user))
 
+    status_changed_to = None
     # Status
     if "status" in incoming:
         new_status = normalize_status(normalize_enum(incoming["status"]))
         if not is_forward_status(existing.get("status"), new_status):
             raise HTTPException(status_code=400, detail="Cannot move task back to a previous stage")
+        if new_status == TaskStatus.COMPLETED.value and not await is_task_reviewer(existing, current_user):
+            raise HTTPException(status_code=403, detail="Only reviewers can mark tasks as completed")
+        if new_status == TaskStatus.COMPLETED.value and current_status != TaskStatus.REVIEW.value:
+            raise HTTPException(status_code=400, detail="Task must be in review before completion")
         if existing.get("status") != new_status:
             update_data["status"] = new_status
-            if new_status == "completed":
+            status_changed_to = new_status
+            if new_status == TaskStatus.COMPLETED.value:
                 update_data["completed_at"] = datetime.utcnow()
-            add_activity(f"Status changed to {new_status} by {actor_name}")
-            add_project_activity(f"Task \"{task_title}\" status changed to {new_status} by {actor_name}")
+            add_activity(f"Status changed to {status_label(new_status)} by {actor_name}")
+            add_project_activity(f"Task \"{task_title}\" status changed to {status_label(new_status)} by {actor_name}")
 
     # Priority
     if "priority" in incoming:
@@ -524,6 +676,14 @@ async def update_task(
     if project_activity_entries:
         await push_project_activity(existing.get("project_id"), project_activity_entries)
     task = await tasks.find_one({"_id": ObjectId(task_id)})
+    if status_changed_to:
+        await notify_task_change(
+            task,
+            current_user,
+            f"Task \"{task_title}\" moved to {status_label(status_changed_to)} by {actor_name}",
+            status=status_changed_to
+        )
+        await check_project_auto_complete(task["project_id"])
     return await populate_task(task)
 
 
@@ -544,13 +704,17 @@ async def update_task_status(
         return await populate_task(existing)
     if not is_forward_status(current_status, new_status):
         raise HTTPException(status_code=400, detail="Cannot move task back to a previous stage")
+    if new_status == TaskStatus.COMPLETED.value and not await is_task_reviewer(existing, current_user):
+        raise HTTPException(status_code=403, detail="Only reviewers can mark tasks as completed")
+    if new_status == TaskStatus.COMPLETED.value and current_status != TaskStatus.REVIEW.value:
+        raise HTTPException(status_code=400, detail="Task must be in review before completion")
     
     update_data = {"status": new_status, "updated_at": datetime.utcnow()}
-    if new_status == "completed":
+    if new_status == TaskStatus.COMPLETED.value:
         update_data["completed_at"] = datetime.utcnow()
     
     activity = build_activity_entry(
-        f"Status changed to {new_status} by {current_user.get('name', 'Unknown')}",
+        f"Status changed to {status_label(new_status)} by {current_user.get('name', 'Unknown')}",
         current_user
     )
     
@@ -563,7 +727,7 @@ async def update_task_status(
     )
 
     project_description = (
-        f"Task \"{existing.get('title', 'Task')}\" status changed to {new_status} "
+        f"Task \"{existing.get('title', 'Task')}\" status changed to {status_label(new_status)} "
         f"by {current_user.get('name', 'Unknown')}"
     )
     await push_project_activity(
@@ -573,9 +737,79 @@ async def update_task_status(
 
     task = await tasks.find_one({"_id": ObjectId(task_id)})
 
+    await notify_task_change(
+        task,
+        current_user,
+        f"Task \"{existing.get('title', 'Task')}\" moved to {status_label(new_status)} by {current_user.get('name', 'Unknown')}",
+        status=new_status
+    )
+
     # Check if project should be auto-completed
     await check_project_auto_complete(task["project_id"])
     
+    return await populate_task(task)
+
+
+@router.put("/{task_id}/review")
+async def review_task(
+    task_id: str,
+    data: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Allow reviewers to accept or decline work submitted for review."""
+    tasks = get_tasks_collection()
+    action = (data.get("action") or "").lower()
+    if action not in ["accept", "decline"]:
+        raise HTTPException(status_code=400, detail="Invalid review action")
+
+    existing = await tasks.find_one({"_id": ObjectId(task_id)})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if not await is_task_reviewer(existing, current_user):
+        raise HTTPException(status_code=403, detail="Only reviewers can take review actions")
+
+    if normalize_status(existing.get("status")) != TaskStatus.REVIEW.value:
+        raise HTTPException(status_code=400, detail="Task is not awaiting review")
+
+    actor_name = current_user.get("name", "Unknown")
+    updates = {"updated_at": datetime.utcnow()}
+
+    if action == "accept":
+        new_status = TaskStatus.COMPLETED.value
+        updates["status"] = new_status
+        updates["completed_at"] = datetime.utcnow()
+        activity_message = f"Task approved and marked completed by {actor_name}"
+        project_message = f"Task \"{existing.get('title', 'Task')}\" approved by {actor_name}"
+    else:
+        new_status = TaskStatus.IN_PROGRESS.value
+        updates["status"] = new_status
+        updates["completed_at"] = None
+        activity_message = f"Task sent back to In Progress by {actor_name}"
+        project_message = f"Task \"{existing.get('title', 'Task')}\" declined and moved to In Progress by {actor_name}"
+
+    await tasks.update_one(
+        {"_id": ObjectId(task_id)},
+        {
+            "$set": updates,
+            "$push": {"activity": build_activity_entry(activity_message, current_user)}
+        }
+    )
+
+    await push_project_activity(
+        existing.get("project_id"),
+        [build_activity_entry(project_message, current_user)]
+    )
+
+    task = await tasks.find_one({"_id": ObjectId(task_id)})
+    await notify_task_change(
+        task,
+        current_user,
+        project_message,
+        event_type="task_review_decision",
+        status=new_status
+    )
+    await check_project_auto_complete(task["project_id"])
     return await populate_task(task)
 
 
@@ -678,6 +912,117 @@ async def update_task_achievements(
     return await populate_task(task)
 
 
+@router.post("/{task_id}/goals")
+async def add_task_goal(
+    task_id: str,
+    data: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Append a new goal with author and timestamp."""
+    tasks = get_tasks_collection()
+    text = (data.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Goal text is required")
+
+    task = await tasks.find_one({"_id": ObjectId(task_id)})
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if not can_log_goal(task, current_user):
+        raise HTTPException(status_code=403, detail="Not allowed to add goals for this task")
+
+    goals = task.get("weekly_goals") or []
+    new_goal = {
+        "id": next_goal_id(goals),
+        "text": text,
+        "status": "pending",
+        "created_at": datetime.utcnow(),
+        "created_by_id": current_user["_id"],
+        "created_by_name": current_user.get("name", "Unknown"),
+        "achieved_at": None,
+        "achieved_by_id": None,
+        "achieved_by_name": None
+    }
+    activity = build_activity_entry(
+        f"Goal added: \"{text}\" by {current_user.get('name', 'Unknown')}",
+        current_user
+    )
+    await tasks.update_one(
+        {"_id": ObjectId(task_id)},
+        {
+            "$push": {"weekly_goals": new_goal, "activity": activity},
+            "$set": {"updated_at": datetime.utcnow()}
+        }
+    )
+    updated = await tasks.find_one({"_id": ObjectId(task_id)})
+    await push_project_activity(
+        task.get("project_id"),
+        [build_activity_entry(f"Goal added to task \"{task.get('title', 'Task')}\": {text}", current_user)]
+    )
+    return await populate_task(updated)
+
+
+@router.put("/{task_id}/goals/{goal_id}/status")
+async def toggle_task_goal(
+    task_id: str,
+    goal_id: int,
+    data: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Mark a goal achieved or pending, logging activity and timestamps."""
+    tasks = get_tasks_collection()
+    task = await tasks.find_one({"_id": ObjectId(task_id)})
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if not can_log_goal(task, current_user):
+        raise HTTPException(status_code=403, detail="Not allowed to update goals for this task")
+
+    goals = task.get("weekly_goals") or []
+    target = None
+    target_index = None
+    for idx, g in enumerate(goals):
+        gid = g.get("id", 0) if isinstance(g, dict) else getattr(g, "id", 0)
+        if int(gid) == int(goal_id):
+            target = g if isinstance(g, dict) else g.dict()
+            target_index = idx
+            break
+    if not target:
+        raise HTTPException(status_code=404, detail="Goal not found")
+
+    achieved = bool(data.get("achieved"))
+    target["status"] = "achieved" if achieved else "pending"
+    target["achieved_at"] = datetime.utcnow() if achieved else None
+    target["achieved_by_id"] = current_user["_id"] if achieved else None
+    target["achieved_by_name"] = current_user.get("name", "Unknown") if achieved else None
+
+    activity_msg = (
+        f"Goal achieved: \"{target.get('text','')}\" by {current_user.get('name','Unknown')}"
+        if achieved else
+        f"Goal marked pending: \"{target.get('text','')}\" by {current_user.get('name','Unknown')}"
+    )
+    activity = build_activity_entry(activity_msg, current_user)
+
+    if target_index is not None:
+        goals[target_index] = target
+
+    await tasks.update_one(
+        {"_id": ObjectId(task_id)},
+        {
+            "$set": {"weekly_goals": goals, "updated_at": datetime.utcnow()},
+            "$push": {"activity": activity}
+        }
+    )
+
+    await push_project_activity(
+        task.get("project_id"),
+        [build_activity_entry(activity_msg, current_user)]
+    )
+
+    updated = await tasks.find_one({"_id": ObjectId(task_id)})
+    return await populate_task(updated)
+
+
 # Comments
 @router.get("/{task_id}/comments")
 async def get_task_comments(
@@ -692,6 +1037,7 @@ async def get_task_comments(
     result = []
     async for comment in cursor:
         comment["_id"] = str(comment["_id"])
+        comment["created_at"] = dt_to_iso_z(comment.get("created_at"))
         
         # Get user
         if comment.get("user_id"):
@@ -728,9 +1074,10 @@ async def add_task_comment(
         "task_id": task_id,
         "user_id": current_user["_id"],
         "attachments": [att.dict() for att in comment_data.attachments] if comment_data.attachments else [],
-        "created_at": datetime.utcnow()
+        "created_at": datetime.utcnow(),
+        "parent_id": comment_data.parent_id
     }
-    
+
     result = await comments.insert_one(comment_dict)
     comment_dict["_id"] = str(result.inserted_id)
     
@@ -741,8 +1088,15 @@ async def add_task_comment(
         comment_dict["user"] = user
     
     # Add activity to task
+    target_label = "reply" if comment_data.parent_id else "comment"
+    content_preview = (comment_data.content or "").strip()
+    if len(content_preview) > 80:
+        content_preview = content_preview[:77] + "..."
+    description = f"{current_user.get('name', 'Unknown')} added a {target_label}"
+    if content_preview:
+        description += f': "{content_preview}"'
     activity = {
-        "description": f"{current_user['name']} added a comment",
+        "description": description,
         "timestamp": activity_timestamp(),
         "user_id": current_user["_id"],
         "user": current_user.get("name", "Unknown")
@@ -751,7 +1105,7 @@ async def add_task_comment(
         {"_id": ObjectId(task_id)},
         {"$push": {"activity": activity}}
     )
-    
+    comment_dict["created_at"] = dt_to_iso_z(comment_dict.get("created_at"))
     return comment_dict
 
 

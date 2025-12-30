@@ -15,3 +15,6 @@ from .task import (
     TaskUpdate, TaskInDB, TaskResponse, CommentBase, CommentCreate,
     CommentInDB, CommentResponse
 )
+from .notification import (
+    NotificationBase, NotificationCreate, NotificationInDB, NotificationResponse
+)

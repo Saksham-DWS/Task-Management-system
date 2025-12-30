@@ -298,7 +298,7 @@ export default function Reports() {
         <div className="card">
           <h2 className="font-semibold text-gray-900 dark:text-white mb-4">Tasks by Status</h2>
           <div className="space-y-3">
-            {['not_started', 'in_progress', 'hold', 'completed'].map(status => {
+            {['not_started', 'in_progress', 'hold', 'review', 'completed'].map(status => {
               const count = filteredTasks.filter(t => t.status === status).length
               const percentage = filteredTasks.length > 0 
                 ? Math.round((count / filteredTasks.length) * 100) 
@@ -307,12 +307,14 @@ export default function Reports() {
                 not_started: 'bg-gray-400',
                 in_progress: 'bg-blue-500',
                 hold: 'bg-yellow-500',
+                review: 'bg-indigo-500',
                 completed: 'bg-green-500'
               }
               const labels = {
                 not_started: 'Not Started',
                 in_progress: 'In Progress',
                 hold: 'On Hold',
+                review: 'Review',
                 completed: 'Completed'
               }
               return (

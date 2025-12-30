@@ -102,13 +102,18 @@ export default function CategoryDetail() {
 
   const handleUpdateProject = async (projectId, formData) => {
     try {
-      const updated = await projectService.update(projectId, {
+      const payload = {
         name: formData.name,
         description: formData.description,
         status: formData.status,
         startDate: formData.startDate,
-        endDate: formData.endDate
-      })
+        endDate: formData.endDate,
+        accessUserIds: formData.accessUserIds || []
+      }
+      if (formData.collaborators !== undefined) {
+        payload.collaborators = formData.collaborators
+      }
+      const updated = await projectService.update(projectId, payload)
       setProjects((prev) =>
         prev.map((proj) => (proj._id === projectId ? updated : proj))
       )
@@ -275,6 +280,7 @@ export default function CategoryDetail() {
         <NewProjectModal 
           categoryId={id}
           onSubmit={handleCreateProject}
+          users={users}
         />
       )}
 
@@ -305,6 +311,7 @@ export default function CategoryDetail() {
           project={modalData.project}
           onSubmit={handleUpdateProject}
           onDelete={handleDeleteProject}
+          users={users}
         />
       )}
     </div>

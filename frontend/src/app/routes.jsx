@@ -8,6 +8,7 @@ import Categories from '../pages/Categories/Categories'
 import CategoryDetail from '../pages/CategoryDetail/CategoryDetail'
 import ProjectDetail from '../pages/ProjectDetail/ProjectDetail'
 import TaskDetail from '../pages/TaskDetail/TaskDetail'
+import Projects from '../pages/Projects/Projects'
 import MyWork from '../pages/MyWork/MyWork'
 import TeamsAccess from '../pages/TeamsAccess/TeamsAccess'
 import Insights from '../pages/Insights/Insights'
@@ -23,6 +24,7 @@ export default function AppRoutes() {
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/categories" element={<ProtectedRoute><Categories /></ProtectedRoute>} />
       <Route path="/categories/:id" element={<ProtectedRoute><CategoryDetail /></ProtectedRoute>} />
+      <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
       <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
       <Route path="/tasks/:id" element={<ProtectedRoute><TaskDetail /></ProtectedRoute>} />
       <Route path="/my-work" element={<ProtectedRoute><MyWork /></ProtectedRoute>} />

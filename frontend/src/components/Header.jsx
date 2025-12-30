@@ -1,18 +1,52 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Bell, LogOut, User, ChevronDown } from 'lucide-react'
+import { Search, Bell, LogOut, User, ChevronDown, Sun, Moon } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
-import { getInitials, getAvatarColor } from '../utils/helpers'
+import { useUIStore } from '../store/ui.store'
+import { getInitials, getAvatarColor, getRelativeTime } from '../utils/helpers'
+import { notificationService } from '../services/notification.service'
 
 export default function Header() {
   const [showDropdown, setShowDropdown] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [notifications, setNotifications] = useState([])
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
   const { user, logout } = useAuth()
+  const { darkMode, toggleDarkMode } = useUIStore()
   const navigate = useNavigate()
+
+  const unreadCount = notifications.filter((n) => !n.read).length
+
+  const loadNotifications = async () => {
+    try {
+      const data = await notificationService.getAll()
+      setNotifications(data)
+    } catch (err) {
+      console.error('Failed to load notifications', err)
+    }
+  }
+
+  useEffect(() => {
+    loadNotifications()
+  }, [])
 
   const handleLogout = async () => {
     await logout()
     navigate('/login')
+  }
+
+  const handleToggleNotifications = async () => {
+    const next = !notificationsOpen
+    setNotificationsOpen(next)
+    if (next) {
+      try {
+        await loadNotifications()
+        await notificationService.markAllRead()
+        setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+      } catch (err) {
+        console.error('Failed to open notifications', err)
+      }
+    }
   }
 
   return (
@@ -34,9 +68,65 @@ export default function Header() {
       {/* Right section */}
       <div className="flex items-center gap-4">
         {/* Notifications */}
-        <button className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-          <Bell size={20} className="text-gray-600 dark:text-gray-400" />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+        <div className="relative">
+          <button
+            onClick={handleToggleNotifications}
+            className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          >
+            <Bell size={20} className="text-gray-600 dark:text-gray-400" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
+                {unreadCount}
+              </span>
+            )}
+          </button>
+          {notificationsOpen && (
+            <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-[#111111] rounded-lg shadow-lg border border-gray-200 dark:border-gray-800 z-50">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                <span className="font-semibold text-gray-900 dark:text-white">Notifications</span>
+                <button
+                  onClick={async () => {
+                    try {
+                      await notificationService.markAllRead()
+                      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+                    } catch (err) {
+                      console.error('Failed to mark notifications read', err)
+                    }
+                  }}
+                  className="text-xs text-primary-600 hover:text-primary-700"
+                >
+                  Mark all read
+                </button>
+              </div>
+              <div className="max-h-72 overflow-y-auto">
+                {notifications.length === 0 && (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 px-4 py-6 text-center">No notifications yet</p>
+                )}
+                {notifications.map((note) => (
+                  <div
+                    key={note._id}
+                    className={`px-4 py-3 border-b border-gray-100 dark:border-gray-800 ${note.read ? 'bg-white dark:bg-[#111111]' : 'bg-indigo-50 dark:bg-indigo-900/30'}`}
+                  >
+                    <p className="text-sm text-gray-900 dark:text-white">{note.message}</p>
+                    <p className="text-xs text-gray-500">{getRelativeTime(note.created_at || note.createdAt)}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Dark mode toggle */}
+        <button
+          onClick={toggleDarkMode}
+          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+        >
+          {darkMode ? (
+            <Sun size={20} className="text-gray-600 dark:text-gray-400" />
+          ) : (
+            <Moon size={20} className="text-gray-600 dark:text-gray-400" />
+          )}
         </button>
 
         {/* User menu */}

@@ -24,10 +24,12 @@ export default function ProjectCard({ project, canEdit = false, onEdit }) {
     orderedMembers.push(member)
   }
   addMember(project.owner)
+  ;(project.accessUsers || project.access_users || []).forEach(addMember)
   ;(project.members || []).forEach(addMember)
   ;(project.collaborators || []).forEach(addMember)
   const members = orderedMembers
   const memberCount = members.length
+  const accessUserIds = project.accessUserIds || project.access_user_ids || []
 
   const getHealthBadge = () => {
     if (!project.healthScore) return null
@@ -131,6 +133,11 @@ export default function ProjectCard({ project, canEdit = false, onEdit }) {
             {memberCount > 8 && (
               <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-600">
                 +{memberCount - 8}
+              </span>
+            )}
+            {memberCount === 0 && accessUserIds.length > 0 && (
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-600">
+                {accessUserIds.length} access user(s)
               </span>
             )}
           </div>

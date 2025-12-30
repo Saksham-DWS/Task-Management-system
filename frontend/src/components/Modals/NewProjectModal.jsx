@@ -2,9 +2,12 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 import { useUIStore } from '../../store/ui.store'
 import { PROJECT_STATUS } from '../../utils/constants'
+import { getTodayInputDate } from '../../utils/helpers'
+import AccessMultiSelect from '../Inputs/AccessMultiSelect'
 
 export default function NewProjectModal({ categoryId, onSubmit, users = [] }) {
   const { closeModal } = useUIStore()
+  const todayInputDate = getTodayInputDate()
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -12,6 +15,7 @@ export default function NewProjectModal({ categoryId, onSubmit, users = [] }) {
     status: PROJECT_STATUS.ONGOING,
     startDate: '',
     endDate: '',
+    accessUserIds: [],
     collaborators: []
   })
   const [loading, setLoading] = useState(false)
@@ -107,6 +111,7 @@ export default function NewProjectModal({ categoryId, onSubmit, users = [] }) {
                 type="date"
                 value={formData.startDate}
                 onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                min={todayInputDate}
                 className="input-field"
               />
             </div>
@@ -122,6 +127,13 @@ export default function NewProjectModal({ categoryId, onSubmit, users = [] }) {
               />
             </div>
           </div>
+
+          <AccessMultiSelect
+            users={users}
+            label="Project Access (project-level owners)"
+            selectedIds={formData.accessUserIds}
+            onChange={(accessUserIds) => setFormData({ ...formData, accessUserIds })}
+          />
 
           {users.length > 0 && (
             <div>

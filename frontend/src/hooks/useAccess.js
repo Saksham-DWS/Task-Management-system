@@ -18,7 +18,8 @@ export const useAccess = () => {
 
   const access = {
     ...userAccess,
-    role: user?.role
+    role: user?.role,
+    userId: user?._id || user?.id
   }
 
   return {

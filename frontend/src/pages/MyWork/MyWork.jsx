@@ -40,6 +40,8 @@ export default function MyWork() {
       filtered = filtered.filter(t => t.status === TASK_STATUS.BLOCKED)
     } else if (filter === 'in_progress') {
       filtered = filtered.filter(t => t.status === TASK_STATUS.IN_PROGRESS)
+    } else if (filter === 'review') {
+      filtered = filtered.filter(t => t.status === TASK_STATUS.REVIEW)
     } else if (filter === 'completed') {
       filtered = filtered.filter(t => t.status === TASK_STATUS.COMPLETED)
     }
@@ -159,6 +161,7 @@ export default function MyWork() {
             <option value="today">Due Today</option>
             <option value="overdue">Overdue</option>
             <option value="in_progress">In Progress</option>
+            <option value="review">In Review</option>
             <option value="blocked">Blocked</option>
             <option value="completed">Completed</option>
           </select>
@@ -216,6 +219,7 @@ export default function MyWork() {
                     <span className={`px-2 py-1 text-xs rounded-full ${
                       task.status === TASK_STATUS.COMPLETED ? 'bg-green-100 text-green-700' :
                       task.status === TASK_STATUS.BLOCKED ? 'bg-red-100 text-red-700' :
+                      task.status === TASK_STATUS.REVIEW ? 'bg-indigo-100 text-indigo-700' :
                       task.status === TASK_STATUS.IN_PROGRESS ? 'bg-blue-100 text-blue-700' :
                       'bg-gray-100 text-gray-700'
                     }`}>

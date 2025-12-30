@@ -103,8 +103,8 @@ export const taskService = {
     return response.data
   },
 
-  addComment: async (id, content, attachments = []) => {
-    const response = await api.post(`/tasks/${id}/comments`, { content, attachments })
+  addComment: async (id, content, attachments = [], parentId = null) => {
+    const response = await api.post(`/tasks/${id}/comments`, { content, attachments, parent_id: parentId })
     return response.data
   },
 
@@ -118,6 +118,16 @@ export const taskService = {
     return response.data
   },
 
+  addGoal: async (id, text) => {
+    const response = await api.post(`/tasks/${id}/goals`, { text })
+    return normalizeTask(response.data)
+  },
+
+  toggleGoal: async (id, goalId, achieved) => {
+    const response = await api.put(`/tasks/${id}/goals/${goalId}/status`, { achieved })
+    return normalizeTask(response.data)
+  },
+
   addSubtask: async (id, subtask) => {
     const response = await api.post(`/tasks/${id}/subtasks`, subtask)
     return response.data
@@ -126,5 +136,10 @@ export const taskService = {
   updateSubtask: async (id, subtaskId, completed) => {
     const response = await api.put(`/tasks/${id}/subtasks/${subtaskId}`, { completed })
     return response.data
+  },
+
+  reviewDecision: async (id, action) => {
+    const response = await api.put(`/tasks/${id}/review`, { action })
+    return normalizeTask(response.data)
   }
 }

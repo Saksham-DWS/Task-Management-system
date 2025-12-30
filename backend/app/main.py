@@ -9,6 +9,7 @@ from .routes import (
     categories_router,
     projects_router,
     tasks_router,
+    notifications_router,
     ai_router
 )
 
@@ -44,6 +45,7 @@ app.include_router(users_router)
 app.include_router(categories_router)
 app.include_router(projects_router)
 app.include_router(tasks_router)
+app.include_router(notifications_router)
 app.include_router(ai_router)
 
 

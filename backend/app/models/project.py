@@ -34,6 +34,8 @@ class ProjectBase(BaseModel):
 
 class ProjectCreate(ProjectBase):
     category_id: str
+    access_user_ids: List[str] = Field(default_factory=list, alias="accessUserIds")
+    collaborator_ids: List[str] = Field(default_factory=list, alias="collaboratorIds")
 
 
 class ProjectUpdate(BaseModel):
@@ -42,6 +44,8 @@ class ProjectUpdate(BaseModel):
     status: Optional[ProjectStatus] = None
     start_date: Optional[datetime] = Field(default=None, alias="startDate")
     end_date: Optional[datetime] = Field(default=None, alias="endDate")
+    access_user_ids: Optional[List[str]] = Field(default=None, alias="accessUserIds")
+    collaborator_ids: Optional[List[str]] = Field(default=None, alias="collaboratorIds")
 
     class Config:
         populate_by_name = True
@@ -52,6 +56,7 @@ class ProjectInDB(ProjectBase):
     category_id: str
     owner_id: str
     collaborator_ids: List[str] = []
+    access_user_ids: List[str] = []
     weekly_goals: List[Goal] = []
     weekly_achievements: List[Achievement] = []
     health_score: int = 0
@@ -68,6 +73,8 @@ class ProjectResponse(ProjectBase):
     owner_id: str
     owner: Optional[Any] = None
     collaborators: List[Any] = []
+    access_users: List[Any] = []
+    access_user_ids: List[str] = []
     weekly_goals: List[Goal] = []
     weekly_achievements: List[Achievement] = []
     health_score: int = 0

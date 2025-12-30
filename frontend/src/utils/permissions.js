@@ -57,6 +57,10 @@ export const canEditTask = (userAccess, task) => {
   if (userAccess.role === USER_ROLES.ADMIN) return true
   if (getCategoryIds(userAccess).includes(task.categoryId)) return true
   if (getProjectIds(userAccess).includes(task.projectId)) return true
+  const userId = userAccess.userId
+  const isAssignee = Array.isArray(task.assignees) && task.assignees.some(a => (a._id || a.id) === userId)
+  const isCollaborator = Array.isArray(task.collaborators) && task.collaborators.some(c => (c._id || c.id) === userId)
+  if (isAssignee || isCollaborator) return true
   // Task-level users can only update status and add comments
   return getTaskIds(userAccess).includes(task._id)
 }

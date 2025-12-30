@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { X, Search, ChevronDown, Check } from 'lucide-react'
 import { useUIStore } from '../../store/ui.store'
 import { PRIORITY, TASK_STATUS } from '../../utils/constants'
-import { getInitials, getAvatarColor } from '../../utils/helpers'
+import { getInitials, getAvatarColor, getTodayInputDate } from '../../utils/helpers'
 
 // Searchable Multi-Select Dropdown Component
 function MultiSelectDropdown({ label, users, selectedIds, onChange, placeholder, required }) {
@@ -127,6 +127,7 @@ function MultiSelectDropdown({ label, users, selectedIds, onChange, placeholder,
 
 export default function NewTaskModal({ projectId, initialStatus, onSubmit, users = [] }) {
   const { closeModal } = useUIStore()
+  const todayInputDate = getTodayInputDate()
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -135,7 +136,7 @@ export default function NewTaskModal({ projectId, initialStatus, onSubmit, users
     priority: PRIORITY.MEDIUM,
     assignees: [],
     collaborators: [],
-    assignedDate: new Date().toISOString().split('T')[0],
+    assignedDate: todayInputDate,
     dueDate: ''
   })
   const [loading, setLoading] = useState(false)
@@ -280,7 +281,7 @@ export default function NewTaskModal({ projectId, initialStatus, onSubmit, users
                 <option value={TASK_STATUS.NOT_STARTED}>Not Started</option>
                 <option value={TASK_STATUS.IN_PROGRESS}>In Progress</option>
                 <option value={TASK_STATUS.HOLD}>On Hold</option>
-                <option value={TASK_STATUS.COMPLETED}>Completed</option>
+                <option value={TASK_STATUS.REVIEW}>Review</option>
               </select>
             </div>
           </div>
@@ -294,6 +295,7 @@ export default function NewTaskModal({ projectId, initialStatus, onSubmit, users
                 type="date"
                 value={formData.assignedDate}
                 onChange={(e) => setFormData({ ...formData, assignedDate: e.target.value })}
+                min={todayInputDate}
                 className="input-field"
               />
             </div>

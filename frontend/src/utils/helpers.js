@@ -9,7 +9,8 @@ const parseDateSafe = (date) => {
       const [y, m, d] = trimmed.split('-').map(Number)
       return new Date(Date.UTC(y, m - 1, d))
     }
-    const parsed = new Date(trimmed)
+    const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(trimmed)
+    const parsed = new Date(hasTz ? trimmed : `${trimmed}Z`)
     return Number.isNaN(parsed.getTime()) ? null : parsed
   }
   const d = new Date(date)
@@ -28,6 +29,12 @@ export const formatDateTime = (date) => {
   const parsed = parseDateSafe(date)
   if (!parsed) return ''
   return format(parsed, 'dd MMM yyyy h:mm a')
+}
+
+export const getTodayInputDate = () => {
+  const now = new Date()
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+  return local.toISOString().split('T')[0]
 }
 
 // Get relative time
@@ -106,6 +113,7 @@ export const groupTasksByStatus = (tasks) => {
     not_started: tasks.filter(t => normalizeTaskStatus(t.status) === TASK_STATUS.NOT_STARTED),
     in_progress: tasks.filter(t => normalizeTaskStatus(t.status) === TASK_STATUS.IN_PROGRESS),
     hold: tasks.filter(t => normalizeTaskStatus(t.status) === TASK_STATUS.HOLD),
+    review: tasks.filter(t => normalizeTaskStatus(t.status) === TASK_STATUS.REVIEW),
     completed: tasks.filter(t => normalizeTaskStatus(t.status) === TASK_STATUS.COMPLETED)
   }
 }

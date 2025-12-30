@@ -30,7 +30,7 @@ export default function TaskDetail() {
   const navigate = useNavigate()
   const { user } = useAuthStore()
   const { activeModal, openModal, closeModal } = useUIStore()
-  const { canDeleteTask, canEditTask, canViewCategory, canViewProject } = useAccess()
+  const { canDeleteTask, canEditTask, canViewCategory, canViewProject, isAdmin } = useAccess()
   const fileInputRef = useRef(null)
 
   const [task, setTask] = useState(null)
@@ -41,6 +41,8 @@ export default function TaskDetail() {
   const [newGoal, setNewGoal] = useState('')
   const [newAchievement, setNewAchievement] = useState('')
   const [attachments, setAttachments] = useState([])
+  const [reviewLoading, setReviewLoading] = useState(false)
+  const [replyDrafts, setReplyDrafts] = useState({})
 
   useEffect(() => {
     loadData()
@@ -63,6 +65,11 @@ export default function TaskDetail() {
   }
 
   const handleStatusChange = async (newStatus) => {
+    const normalizedTarget = normalizeTaskStatus(newStatus)
+    const current = normalizeTaskStatus(task.status)
+    if (normalizedTarget === TASK_STATUS.COMPLETED || current === TASK_STATUS.REVIEW) {
+      return
+    }
     try {
       await taskService.updateStatus(id, newStatus)
       setTask({ ...task, status: newStatus })
@@ -80,6 +87,18 @@ export default function TaskDetail() {
     }
   }
 
+  const handleReviewDecision = async (decision) => {
+    setReviewLoading(true)
+    try {
+      const updated = await taskService.reviewDecision(id, decision)
+      setTask(updated)
+    } catch (error) {
+      console.error('Failed to update review decision:', error)
+    } finally {
+      setReviewLoading(false)
+    }
+  }
+
   const handleAddComment = async (e) => {
     e.preventDefault()
     if (!newComment.trim() && attachments.length === 0) return
@@ -90,10 +109,40 @@ export default function TaskDetail() {
       setComments([...comments, comment])
       setNewComment('')
       setAttachments([])
+      const actorName = comment.user?.name || 'Unknown'
+      const entry = {
+        description: comment.parent_id
+          ? `Reply added: "${comment.content}" by ${actorName}`
+          : `Comment added: "${comment.content}" by ${actorName}`,
+        timestamp: new Date().toISOString(),
+        user: actorName,
+        user_id: comment.user?._id || comment.user_id
+      }
+      setTask((prev) => prev ? { ...prev, activity: [entry, ...(prev.activity || [])] } : prev)
     } catch (error) {
       console.error('Failed to add comment:', error)
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleReplySubmit = async (parentId) => {
+    const text = replyDrafts[parentId] || ''
+    if (!text.trim()) return
+    try {
+      const comment = await taskService.addComment(id, text, [], parentId)
+      setComments([...comments, comment])
+      setReplyDrafts((prev) => ({ ...prev, [parentId]: '' }))
+      const actorName = comment.user?.name || 'Unknown'
+      const entry = {
+        description: `Reply added: "${comment.content}" by ${actorName}`,
+        timestamp: new Date().toISOString(),
+        user: actorName,
+        user_id: comment.user?._id || comment.user_id
+      }
+      setTask((prev) => prev ? { ...prev, activity: [entry, ...(prev.activity || [])] } : prev)
+    } catch (error) {
+      console.error('Failed to add reply:', error)
     }
   }
 
@@ -129,10 +178,9 @@ export default function TaskDetail() {
 
   const handleAddGoal = async () => {
     if (!newGoal.trim()) return
-    const updatedGoals = [...(task.weekly_goals || task.weeklyGoals || []), { id: Date.now(), text: newGoal, status: 'pending' }]
     try {
-      await taskService.update(id, { weekly_goals: updatedGoals })
-      setTask({ ...task, weekly_goals: updatedGoals, weeklyGoals: updatedGoals })
+      const updated = await taskService.addGoal(id, newGoal)
+      setTask(updated)
       setNewGoal('')
     } catch (error) {
       console.error('Failed to add goal:', error)
@@ -142,7 +190,10 @@ export default function TaskDetail() {
 
   const handleAddAchievement = async () => {
     if (!newAchievement.trim()) return
-    const updatedAchievements = [...(task.weekly_achievements || task.weeklyAchievements || []), { id: Date.now(), text: newAchievement }]
+    const updatedAchievements = [
+      ...(task.weekly_achievements || task.weeklyAchievements || []),
+      { id: Date.now(), text: newAchievement, created_at: new Date().toISOString() }
+    ]
     try {
       await taskService.update(id, { weekly_achievements: updatedAchievements })
       setTask({ ...task, weekly_achievements: updatedAchievements, weeklyAchievements: updatedAchievements })
@@ -150,6 +201,15 @@ export default function TaskDetail() {
     } catch (error) {
       console.error('Failed to add achievement:', error)
       alert('Failed to add achievement. Please try again.')
+    }
+  }
+
+  const handleToggleGoal = async (goalId, achieved) => {
+    try {
+      const updated = await taskService.toggleGoal(id, goalId, achieved)
+      setTask(updated)
+    } catch (error) {
+      console.error('Failed to update goal status:', error)
     }
   }
 
@@ -177,15 +237,127 @@ export default function TaskDetail() {
   const canSeeCategory = canViewCategory(categoryId)
   const canSeeProject = canViewProject(projectId, categoryId)
   const normalizedStatus = normalizeTaskStatus(task.status)
+  const isReviewer = user?.role === 'admin' || user?.role === 'manager' || task.assigned_by?._id === user?._id || task.assigned_by_id === user?._id
+  const isAwaitingReview = normalizedStatus === TASK_STATUS.REVIEW
+  const userId = user?._id || user?.id
+  const assigneeIds = task?.assignees?.map(a => a._id) || []
+  const canManageGoals = isAdmin() || assigneeIds.includes(userId)
   const statusClass = TASK_STATUS_COLORS[normalizedStatus] || 'bg-gray-100 text-gray-700'
   const priorityClass = PRIORITY_COLORS[task.priority] || 'bg-gray-100 text-gray-700'
   const overdue = isOverdue(task.dueDate || task.due_date) && normalizedStatus !== TASK_STATUS.COMPLETED
   const goals = task.weekly_goals || task.weeklyGoals || []
   const achievements = task.weekly_achievements || task.weeklyAchievements || []
+  const activityEntries = [...(task.activity || [])].sort((a, b) => {
+    const ta = new Date(a.timestamp || a.time || a.date || 0).getTime()
+    const tb = new Date(b.timestamp || b.time || b.date || 0).getTime()
+    return tb - ta
+  }).slice(0, 20)
   const currentStatusIndex = TASK_STATUS_ORDER.indexOf(normalizedStatus)
-  const allowedStatusOptions = currentStatusIndex === -1
-    ? Object.keys(TASK_STATUS_LABELS)
+  const rawStatusOptions = currentStatusIndex === -1
+    ? TASK_STATUS_ORDER
     : TASK_STATUS_ORDER.slice(currentStatusIndex)
+  const allowedStatusOptions = rawStatusOptions.filter((value) => {
+    if (value === TASK_STATUS.COMPLETED) {
+      return normalizedStatus === TASK_STATUS.COMPLETED
+    }
+    return true
+  })
+  const statusSelectDisabled = !canEditTask(task) || isAwaitingReview || normalizedStatus === TASK_STATUS.COMPLETED
+  const sortedComments = [...comments].sort((a, b) => {
+    const ta = new Date(a.created_at || a.createdAt || 0).getTime()
+    const tb = new Date(b.created_at || b.createdAt || 0).getTime()
+    return ta - tb
+  })
+  const commentTree = sortedComments.reduce((acc, comment) => {
+    const parentId = comment.parent_id || comment.parentId || null
+    if (!acc[parentId]) acc[parentId] = []
+    acc[parentId].push(comment)
+    return acc
+  }, {})
+
+  const renderComment = (comment, depth = 0) => {
+    const children = commentTree[comment._id] || []
+    const createdTs = comment.created_at || comment.createdAt || null
+    const relativeStamp = createdTs ? getRelativeTime(createdTs) : 'just now'
+    const exactStamp = createdTs ? formatDateTime(createdTs) : ''
+    return (
+      <div key={comment._id} className="flex gap-3" style={{ marginLeft: depth * 20 }}>
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs flex-shrink-0 ${getAvatarColor(comment.user?.name)}`}>
+          {getInitials(comment.user?.name)}
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-medium text-gray-900 dark:text-white">{comment.user?.name || 'Unknown'}</span>
+            <span className="text-xs text-gray-500">
+              {relativeStamp}{exactStamp ? ` | ${exactStamp}` : ''}
+            </span>
+          </div>
+          <p className="text-gray-700 dark:text-gray-300 mt-1 whitespace-pre-wrap">{comment.content}</p>
+          {comment.attachments?.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {comment.attachments.map((att, i) => (
+                <div key={i} className="relative">
+                  {att.type?.startsWith('image/') ? (
+                    <img src={att.data || att.url} alt={att.name} className="max-w-xs max-h-32 rounded-lg border" />
+                  ) : (
+                    <a href={att.data || att.url} download={att.name} className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-sm">
+                      <Paperclip size={14} />
+                      {att.name}
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-3 mt-2">
+            <button
+              type="button"
+              onClick={() => setReplyDrafts((prev) => ({ ...prev, [comment._id]: prev[comment._id] || '' }))}
+              className="text-xs text-primary-600 hover:underline"
+            >
+              Reply
+            </button>
+          </div>
+          {replyDrafts[comment._id] !== undefined && (
+            <div className="mt-2 space-y-2 border-l pl-3">
+              <textarea
+                value={replyDrafts[comment._id]}
+                onChange={(e) => setReplyDrafts((prev) => ({ ...prev, [comment._id]: e.target.value }))}
+                className="input-field w-full min-h-[60px]"
+                placeholder="Write a reply..."
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleReplySubmit(comment._id)}
+                  className="btn-primary px-3 py-2 text-sm"
+                  disabled={!replyDrafts[comment._id]?.trim()}
+                >
+                  Reply
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReplyDrafts((prev) => {
+                    const copy = { ...prev }
+                    delete copy[comment._id]
+                    return copy
+                  })}
+                  className="btn-secondary px-3 py-2 text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+          {children.length > 0 && (
+            <div className="mt-3 space-y-3">
+              {children.map((child) => renderComment(child, depth + 1))}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -239,7 +411,7 @@ export default function TaskDetail() {
                   value={normalizedStatus}
                   onChange={(e) => handleStatusChange(e.target.value)}
                   className={`px-3 py-2 rounded-lg font-medium text-sm ${statusClass} border-0 cursor-pointer`}
-                  disabled={!canEditTask(task)}
+                  disabled={statusSelectDisabled}
                 >
                   {allowedStatusOptions.map((value) => (
                     <option key={value} value={value}>
@@ -274,6 +446,35 @@ export default function TaskDetail() {
                 </div>
               )}
             </div>
+            {isAwaitingReview && (
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <div className="flex-1 px-3 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-200 text-sm">
+                  Awaiting review. The task creator or manager can accept or decline.
+                </div>
+                {isReviewer ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleReviewDecision('decline')}
+                      disabled={reviewLoading}
+                      className="px-3 py-2 rounded-lg border border-amber-300 text-amber-700 hover:bg-amber-50 disabled:opacity-60"
+                    >
+                      {reviewLoading ? 'Updating...' : 'Decline'}
+                    </button>
+                    <button
+                      onClick={() => handleReviewDecision('accept')}
+                      disabled={reviewLoading}
+                      className="px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                    >
+                      {reviewLoading ? 'Updating...' : 'Accept'}
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    A reviewer will move this task forward after checking.
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Description */}
@@ -308,32 +509,11 @@ export default function TaskDetail() {
             </div>
           )}
 
-          {/* Task Goals */}
-          <div className="card">
-            <div className="flex items-center gap-2 mb-4">
+          {/* Task Goals & Achievements (single log) */}
+          <div className="card space-y-4">
+            <div className="flex items-center gap-2">
               <Target className="text-blue-500" size={20} />
-              <h3 className="font-semibold text-gray-900 dark:text-white">Task Goals</h3>
-            </div>
-            
-            <div className="space-y-3 mb-4">
-              {goals.map(goal => (
-                <div key={goal.id} className="flex items-start gap-3 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
-                  <span className="text-blue-600">🎯</span>
-                  <div className="flex-1">
-                    <span className="text-gray-700 dark:text-gray-300">{goal.text}</span>
-                    <span className={`ml-2 text-xs px-2 py-0.5 rounded ${
-                      goal.status === 'achieved' ? 'bg-green-100 text-green-700' :
-                      goal.status === 'missed' ? 'bg-red-100 text-red-700' :
-                      'bg-yellow-100 text-yellow-700'
-                    }`}>
-                      {goal.status || 'pending'}
-                    </span>
-                  </div>
-                </div>
-              ))}
-              {goals.length === 0 && (
-                <p className="text-gray-400 text-sm">No goals set for this task. Add goals to track progress.</p>
-              )}
+              <h3 className="font-semibold text-gray-900 dark:text-white">Goals & Achievements</h3>
             </div>
 
             <div className="flex gap-2">
@@ -341,43 +521,62 @@ export default function TaskDetail() {
                 type="text"
                 value={newGoal}
                 onChange={(e) => setNewGoal(e.target.value)}
-                placeholder="Add a goal for this task..."
+                placeholder="Write a goal for this task..."
                 className="input-field flex-1"
-                onKeyPress={(e) => e.key === 'Enter' && handleAddGoal()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    handleAddGoal()
+                  }
+                }}
+                disabled={!canManageGoals}
               />
-              <button onClick={handleAddGoal} className="btn-primary">Add Goal</button>
+              <button
+                onClick={handleAddGoal}
+                className="btn-primary disabled:opacity-50"
+                disabled={!canManageGoals || !newGoal.trim()}
+              >
+                Add
+              </button>
             </div>
-          </div>
 
-          {/* Task Achievements */}
-          <div className="card">
-            <div className="flex items-center gap-2 mb-4">
-              <Trophy className="text-yellow-500" size={20} />
-              <h3 className="font-semibold text-gray-900 dark:text-white">Task Achievements</h3>
-            </div>
-            
-            <div className="space-y-3 mb-4">
-              {achievements.map(achievement => (
-                <div key={achievement.id} className="flex items-start gap-3 p-3 bg-green-50 dark:bg-green-900/30 rounded-lg">
-                  <span className="text-green-600">✓</span>
-                  <span className="text-gray-700 dark:text-gray-300">{achievement.text}</span>
+            <div className="space-y-3">
+              {goals.map(goal => (
+                <div key={goal.id} className="flex items-start gap-3 p-3 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
+                  <input
+                    type="checkbox"
+                    checked={goal.status === 'achieved'}
+                    onChange={(e) => handleToggleGoal(goal.id, e.target.checked)}
+                    disabled={!canManageGoals}
+                    className="mt-1 h-5 w-5 rounded border-gray-300 text-primary-600 disabled:opacity-50"
+                  />
+                  <div className="flex-1 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`text-base ${goal.status === 'achieved' ? 'line-through text-gray-400' : 'text-gray-800 dark:text-gray-200'}`}>
+                        {goal.text}
+                      </span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        goal.status === 'achieved'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {goal.status === 'achieved' ? 'Achieved' : 'Pending'}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      By {goal.created_by_name || 'Unknown'} {goal.created_at ? `· ${formatDateTime(goal.created_at)}` : ''}
+                    </div>
+                    {goal.achieved_at && (
+                      <div className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                        Achieved on {formatDateTime(goal.achieved_at)} by {goal.achieved_by_name || 'Unknown'}
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
-              {achievements.length === 0 && (
-                <p className="text-gray-400 text-sm">No achievements recorded. Add achievements to track what you've accomplished.</p>
+              {goals.length === 0 && (
+                <p className="text-gray-400 text-sm">No goals yet. Add a goal to start tracking progress.</p>
               )}
-            </div>
-
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newAchievement}
-                onChange={(e) => setNewAchievement(e.target.value)}
-                placeholder="Add an achievement..."
-                className="input-field flex-1"
-                onKeyPress={(e) => e.key === 'Enter' && handleAddAchievement()}
-              />
-              <button onClick={handleAddAchievement} className="btn-primary">Add</button>
             </div>
           </div>
 
@@ -386,36 +585,7 @@ export default function TaskDetail() {
             <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Comments ({comments.length})</h3>
             
             <div className="space-y-4 mb-4 max-h-96 overflow-y-auto">
-              {comments.map(comment => (
-                <div key={comment._id} className="flex gap-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs flex-shrink-0 ${getAvatarColor(comment.user?.name)}`}>
-                    {getInitials(comment.user?.name)}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-gray-900 dark:text-white">{comment.user?.name || 'Unknown'}</span>
-                      <span className="text-xs text-gray-500">{getRelativeTime(comment.created_at || comment.createdAt)}</span>
-                    </div>
-                    <p className="text-gray-700 dark:text-gray-300 mt-1">{comment.content}</p>
-                    {comment.attachments?.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {comment.attachments.map((att, i) => (
-                          <div key={i} className="relative">
-                            {att.type?.startsWith('image/') ? (
-                              <img src={att.data || att.url} alt={att.name} className="max-w-xs max-h-32 rounded-lg border" />
-                            ) : (
-                              <a href={att.data || att.url} download={att.name} className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-sm">
-                                <Paperclip size={14} />
-                                {att.name}
-                              </a>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
+              {(commentTree[null] || []).map((comment) => renderComment(comment, 0))}
               {comments.length === 0 && (
                 <p className="text-gray-400 text-sm text-center py-4">No comments yet. Be the first to comment!</p>
               )}
@@ -499,7 +669,7 @@ export default function TaskDetail() {
                     className="btn-primary disabled:opacity-50 flex items-center gap-2"
                   >
                     <Send size={18} />
-                    Send
+                    Post Comment
                   </button>
                 </div>
               </div>
@@ -585,7 +755,7 @@ export default function TaskDetail() {
           <div className="card">
             <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Activity</h3>
             <div className="space-y-3">
-              {(task.activity || []).slice(0, 10).map((activity, i) => (
+              {activityEntries.map((activity, i) => (
                 <div key={i} className="flex items-start gap-2 text-sm">
                   <Clock size={14} className="text-gray-400 mt-0.5" />
                   <div>
@@ -616,3 +786,5 @@ export default function TaskDetail() {
     </div>
   )
 }
+
+

@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { useUIStore } from '../../store/ui.store'
 import { PROJECT_STATUS } from '../../utils/constants'
 import ConfirmDeleteModal from './ConfirmDeleteModal'
+import AccessMultiSelect from '../Inputs/AccessMultiSelect'
 
 const toDateInput = (value) => {
   if (!value) return ''
@@ -17,7 +18,7 @@ const toDateInput = (value) => {
   return `${year}-${month}-${day}`
 }
 
-export default function EditProjectModal({ project, onSubmit, onDelete }) {
+export default function EditProjectModal({ project, onSubmit, onDelete, users = [] }) {
   const { closeModal } = useUIStore()
   const [loading, setLoading] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -26,7 +27,8 @@ export default function EditProjectModal({ project, onSubmit, onDelete }) {
     description: '',
     status: PROJECT_STATUS.ONGOING,
     startDate: '',
-    endDate: ''
+    endDate: '',
+    accessUserIds: []
   })
 
   useEffect(() => {
@@ -36,7 +38,8 @@ export default function EditProjectModal({ project, onSubmit, onDelete }) {
         description: project.description || '',
         status: project.status || PROJECT_STATUS.ONGOING,
         startDate: toDateInput(project.startDate || project.start_date),
-        endDate: toDateInput(project.endDate || project.end_date)
+        endDate: toDateInput(project.endDate || project.end_date),
+        accessUserIds: project.accessUserIds || project.access_user_ids || (project.accessUsers || []).map((u) => u._id)
       })
     }
   }, [project])
@@ -138,6 +141,13 @@ export default function EditProjectModal({ project, onSubmit, onDelete }) {
               />
             </div>
           </div>
+
+          <AccessMultiSelect
+            users={users}
+            label="Project Access (project-level owners)"
+            selectedIds={formData.accessUserIds}
+            onChange={(accessUserIds) => setFormData({ ...formData, accessUserIds })}
+          />
 
           {/* Actions */}
           <div className="flex items-center justify-between gap-3 pt-4">

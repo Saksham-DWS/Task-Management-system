@@ -45,3 +45,7 @@ def get_tasks_collection():
 
 def get_comments_collection():
     return db["comments"]
+
+
+def get_notifications_collection():
+    return db["notifications"]
