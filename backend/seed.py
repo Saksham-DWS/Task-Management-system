@@ -37,10 +37,10 @@ async def seed_database():
             "access": {"category_ids": [], "project_ids": [], "task_ids": []},
         },
         {
-            "name": "John Manager",
+            "name": "John User",
             "email": "john@dws.com",
             "password": hash_password("password123"),
-            "role": "manager",
+            "role": "user",
             "access": {"category_ids": [], "project_ids": [], "task_ids": []},
         },
         {
@@ -93,7 +93,7 @@ async def seed_database():
     print("\nSeed completed successfully!")
     print("\nDemo credentials:")
     print("  Admin: admin@dws.com / admin123")
-    print("  Manager: john@dws.com / password123")
+    print("  User: john@dws.com / password123")
     print("  User: sarah@dws.com / password123")
     print("  User: mike@dws.com / password123")
 

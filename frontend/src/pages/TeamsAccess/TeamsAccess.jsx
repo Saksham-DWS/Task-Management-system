@@ -1,9 +1,18 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Plus, Search, Shield, Trash2, Edit2, X, Check } from 'lucide-react'
 import { getInitials, getAvatarColor } from '../../utils/helpers'
 import { USER_ROLES } from '../../utils/constants'
 import { useAuthStore } from '../../store/auth.store'
 import api from '../../services/api'
+
+const normalizeRole = (role) => (role === USER_ROLES.MANAGER ? USER_ROLES.ADMIN : role)
+
+const roleLabel = (role) => {
+  const normalized = normalizeRole(role)
+  return normalized === USER_ROLES.ADMIN ? 'Admin' : 'User'
+}
+
+const statusValue = (user) => (user?.status || 'active').toLowerCase()
 
 export default function TeamsAccess() {
   const { user: currentUser } = useAuthStore()
@@ -16,7 +25,10 @@ export default function TeamsAccess() {
   const [showEditUser, setShowEditUser] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: USER_ROLES.USER })
-  const [editUser, setEditUser] = useState({ name: '', email: '' })
+  const [editUser, setEditUser] = useState({ name: '', email: '', role: USER_ROLES.USER, password: '' })
+  const [editRoleOriginal, setEditRoleOriginal] = useState(USER_ROLES.USER)
+
+  const isAdmin = currentUser?.role === USER_ROLES.ADMIN
 
   useEffect(() => {
     loadData()
@@ -51,12 +63,42 @@ export default function TeamsAccess() {
     }
   }
 
+  const handleOpenEdit = (user) => {
+    const normalizedRole = normalizeRole(user.role)
+    setSelectedUser(user)
+    setEditUser({
+      name: user.name || '',
+      email: user.email || '',
+      role: normalizedRole,
+      password: ''
+    })
+    setEditRoleOriginal(normalizedRole)
+    setShowEditUser(true)
+  }
+
   const handleEditUser = async (e) => {
     e.preventDefault()
+    if (!selectedUser) return
+
     try {
-      const response = await api.put(`/users/${selectedUser._id}`, editUser)
-      setUsers(users.map(u => u._id === selectedUser._id ? response.data : u))
-      setSelectedUser(response.data)
+      const updatePayload = {
+        name: editUser.name,
+        email: editUser.email
+      }
+      const response = await api.put(`/users/${selectedUser._id}`, updatePayload)
+      let updatedUser = response.data
+
+      if (editUser.role !== editRoleOriginal) {
+        const roleResponse = await api.put(`/users/${selectedUser._id}/role`, { role: editUser.role })
+        updatedUser = roleResponse.data
+      }
+
+      if (editUser.password) {
+        await api.put(`/users/${selectedUser._id}/password`, { new_password: editUser.password })
+      }
+
+      setUsers(users.map((user) => (user._id === selectedUser._id ? updatedUser : user)))
+      setSelectedUser(updatedUser)
       setShowEditUser(false)
     } catch (error) {
       console.error('Failed to update user:', error)
@@ -67,7 +109,7 @@ export default function TeamsAccess() {
   const handleDeleteUser = async () => {
     try {
       await api.delete(`/users/${selectedUser._id}`)
-      setUsers(users.filter(u => u._id !== selectedUser._id))
+      setUsers(users.filter((user) => user._id !== selectedUser._id))
       setSelectedUser(null)
       setShowDeleteConfirm(false)
     } catch (error) {
@@ -83,9 +125,8 @@ export default function TeamsAccess() {
       } else {
         await api.delete(`/users/access/${userId}/category/${categoryId}`)
       }
-      // Refresh user data
       const response = await api.get(`/users/${userId}`)
-      setUsers(users.map(u => u._id === userId ? response.data : u))
+      setUsers(users.map((user) => (user._id === userId ? response.data : user)))
       if (selectedUser?._id === userId) {
         setSelectedUser(response.data)
       }
@@ -94,37 +135,31 @@ export default function TeamsAccess() {
     }
   }
 
-  const handleRoleChange = async (userId, newRole) => {
-    try {
-      await api.put(`/users/${userId}/role`, { role: newRole })
-      setUsers(users.map(u => u._id === userId ? { ...u, role: newRole } : u))
-      if (selectedUser?._id === userId) {
-        setSelectedUser({ ...selectedUser, role: newRole })
-      }
-    } catch (error) {
-      console.error('Failed to update role:', error)
-      alert(error.response?.data?.detail || 'Failed to update role')
-    }
-  }
-
   const hasCategoryAccess = (user, categoryId) => {
     return user?.access?.category_ids?.includes(categoryId) || false
   }
 
-  const filteredUsers = users.filter(user =>
-    user.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email?.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredUsers = users.filter(
+    (user) =>
+      user.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.email?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   const getRoleBadgeClass = (role) => {
-    switch (role) {
-      case USER_ROLES.ADMIN: return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
-      case USER_ROLES.MANAGER: return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-      default: return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+    switch (normalizeRole(role)) {
+      case USER_ROLES.ADMIN:
+        return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+      default:
+        return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
     }
   }
 
-  const isAdmin = currentUser?.role === USER_ROLES.ADMIN
+  const getStatusBadgeClass = (status) => {
+    const value = (status || 'active').toLowerCase()
+    return value === 'inactive'
+      ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+      : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+  }
 
   if (loading) {
     return (
@@ -134,24 +169,30 @@ export default function TeamsAccess() {
     )
   }
 
+  if (!isAdmin) {
+    return (
+      <div className="card">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Teams & Access</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+          Only admins can manage users and access settings.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Teams & Access</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">Manage users and their access permissions</p>
         </div>
-        <button 
-          onClick={() => setShowAddUser(true)}
-          className="btn-primary flex items-center gap-2"
-        >
+        <button onClick={() => setShowAddUser(true)} className="btn-primary flex items-center gap-2">
           <Plus size={18} />
           Add User
         </button>
       </div>
 
-      {/* Search */}
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
         <input
@@ -163,125 +204,183 @@ export default function TeamsAccess() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* User List */}
-        <div className="lg:col-span-1">
-          <div className="card">
-            <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Users ({filteredUsers.length})</h3>
-            <div className="space-y-2 max-h-[600px] overflow-y-auto">
-              {filteredUsers.map(user => (
-                <button
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-gray-900 dark:text-white">Users ({filteredUsers.length})</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Select a user to manage access</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="text-xs uppercase text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+              <tr>
+                <th className="text-left py-3 px-4">Name</th>
+                <th className="text-left py-3 px-4">Email</th>
+                <th className="text-left py-3 px-4">Role</th>
+                <th className="text-left py-3 px-4">Status</th>
+                <th className="text-right py-3 px-4">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+              {filteredUsers.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-6 text-center text-gray-500 dark:text-gray-400">
+                    No users found.
+                  </td>
+                </tr>
+              )}
+              {filteredUsers.map((user) => (
+                <tr
                   key={user._id}
                   onClick={() => setSelectedUser(user)}
-                  className={`w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors ${
-                    selectedUser?._id === user._id 
-                      ? 'bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-700' 
-                      : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+                  className={`cursor-pointer transition-colors ${
+                    selectedUser?._id === user._id
+                      ? 'bg-primary-50 dark:bg-primary-900/20'
+                      : 'hover:bg-gray-50 dark:hover:bg-gray-800'
                   }`}
                 >
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${getAvatarColor(user.name)}`}>
-                    {getInitials(user.name)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 dark:text-white truncate">{user.name}</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{user.email}</p>
-                  </div>
-                  <span className={`px-2 py-1 text-xs rounded-full ${getRoleBadgeClass(user.role)}`}>
-                    {user.role}
-                  </span>
-                </button>
+                  <td className="py-3 px-4">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-9 h-9 rounded-full flex items-center justify-center text-white ${getAvatarColor(
+                          user.name
+                        )}`}
+                      >
+                        {getInitials(user.name)}
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900 dark:text-white">{user.name}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3 px-4 text-gray-600 dark:text-gray-300">{user.email}</td>
+                  <td className="py-3 px-4">
+                    <span className={`px-2.5 py-1 text-xs rounded-full ${getRoleBadgeClass(user.role)}`}>
+                      {roleLabel(user.role)}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4">
+                    <span className={`px-2.5 py-1 text-xs rounded-full ${getStatusBadgeClass(user.status)}`}>
+                      {statusValue(user) === 'inactive' ? 'Inactive' : 'Active'}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          handleOpenEdit(user)
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      >
+                        <Edit2 size={14} />
+                        Edit
+                      </button>
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          setSelectedUser(user)
+                          setShowDeleteConfirm(true)
+                        }}
+                        disabled={user._id === currentUser?._id}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Trash2 size={14} />
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
               ))}
-            </div>
-          </div>
+            </tbody>
+          </table>
         </div>
+      </div>
 
-        {/* Access Panel */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="lg:col-span-2">
           {selectedUser ? (
             <div className="card">
-              {/* User Header */}
-              <div className="flex items-center gap-4 pb-4 border-b border-gray-200 dark:border-gray-700 mb-4">
-                <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-xl ${getAvatarColor(selectedUser.name)}`}>
-                  {getInitials(selectedUser.name)}
-                </div>
-                <div className="flex-1">
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{selectedUser.name}</h2>
-                  <p className="text-gray-500 dark:text-gray-400">{selectedUser.email}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div>
-                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Role</label>
-                    <select
-                      value={selectedUser.role}
-                      onChange={(e) => handleRoleChange(selectedUser._id, e.target.value)}
-                      className="input-field py-1.5"
-                      disabled={!isAdmin}
-                    >
-                      <option value={USER_ROLES.USER}>User</option>
-                      <option value={USER_ROLES.MANAGER}>Manager</option>
-                      <option value={USER_ROLES.ADMIN}>Admin</option>
-                    </select>
+              <div className="flex flex-col gap-4 pb-4 border-b border-gray-200 dark:border-gray-700 mb-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-4">
+                  <div
+                    className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-xl ${getAvatarColor(
+                      selectedUser.name
+                    )}`}
+                  >
+                    {getInitials(selectedUser.name)}
                   </div>
-                  {isAdmin && selectedUser._id !== currentUser?._id && (
-                    <>
-                      <button
-                        onClick={() => {
-                          setEditUser({ name: selectedUser.name, email: selectedUser.email })
-                          setShowEditUser(true)
-                        }}
-                        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500"
-                        title="Edit user"
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{selectedUser.name}</h2>
+                    <p className="text-gray-500 dark:text-gray-400">{selectedUser.email}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span
+                        className={`px-2.5 py-1 text-xs rounded-full ${getRoleBadgeClass(selectedUser.role)}`}
                       >
-                        <Edit2 size={18} />
-                      </button>
-                      <button
-                        onClick={() => setShowDeleteConfirm(true)}
-                        className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600"
-                        title="Delete user"
+                        {roleLabel(selectedUser.role)}
+                      </span>
+                      <span
+                        className={`px-2.5 py-1 text-xs rounded-full ${getStatusBadgeClass(selectedUser.status)}`}
                       >
-                        <Trash2 size={18} />
-                      </button>
-                    </>
-                  )}
+                        {statusValue(selectedUser) === 'inactive' ? 'Inactive' : 'Active'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
+                {selectedUser._id !== currentUser?._id && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleOpenEdit(selectedUser)}
+                      className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500"
+                      title="Edit user"
+                    >
+                      <Edit2 size={18} />
+                    </button>
+                    <button
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600"
+                      title="Delete user"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                )}
               </div>
 
-              {/* Access Info */}
               <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
                 <div className="flex items-start gap-3">
                   <Shield className="text-blue-600 dark:text-blue-400 flex-shrink-0" size={20} />
                   <div>
                     <h4 className="font-medium text-blue-900 dark:text-blue-200">Simplified Access Control</h4>
                     <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                      Grant access to categories. Users with category access can see all projects and tasks within that category.
-                      For specific task access, add users as collaborators on individual tasks.
+                      Grant access to categories. Users with category access can see all projects and tasks within that
+                      category. For specific task access, add users as collaborators on individual tasks.
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Category Access */}
               <div>
                 <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Category Access</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                  Select categories this user can access. They will automatically have access to all projects and tasks within selected categories.
+                  Select categories this user can access. They will automatically have access to all projects and tasks
+                  within selected categories.
                 </p>
-                
+
                 {categories.length > 0 ? (
                   <div className="space-y-2">
-                    {categories.map(category => {
+                    {categories.map((category) => {
                       const hasAccess = hasCategoryAccess(selectedUser, category._id)
                       return (
                         <div
                           key={category._id}
                           className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
-                            hasAccess 
-                              ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20' 
+                            hasAccess
+                              ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20'
                               : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
                           }`}
                         >
                           <div className="flex items-center gap-3">
-                            <div 
+                            <div
                               className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-semibold"
                               style={{ backgroundColor: category.color || '#6366f1' }}
                             >
@@ -297,8 +396,8 @@ export default function TeamsAccess() {
                           <button
                             onClick={() => handleCategoryAccess(selectedUser._id, category._id, !hasAccess)}
                             className={`p-2 rounded-lg transition-colors ${
-                              hasAccess 
-                                ? 'bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 hover:bg-green-200' 
+                              hasAccess
+                                ? 'bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 hover:bg-green-200'
                                 : 'bg-gray-100 dark:bg-gray-700 text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
                             }`}
                           >
@@ -321,11 +420,10 @@ export default function TeamsAccess() {
         </div>
       </div>
 
-      {/* Add User Modal */}
       {showAddUser && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md">
-            <div className="flex items-center justify-between mb-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-lg">
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 pb-3 mb-4">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Add New User</h3>
               <button onClick={() => setShowAddUser(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
@@ -333,7 +431,7 @@ export default function TeamsAccess() {
             </div>
             <form onSubmit={handleAddUser} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name *</label>
                 <input
                   type="text"
                   value={newUser.name}
@@ -343,7 +441,7 @@ export default function TeamsAccess() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email *</label>
                 <input
                   type="email"
                   value={newUser.email}
@@ -353,7 +451,7 @@ export default function TeamsAccess() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Password</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Password *</label>
                 <input
                   type="password"
                   value={newUser.password}
@@ -364,14 +462,13 @@ export default function TeamsAccess() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role *</label>
                 <select
                   value={newUser.role}
                   onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
                   className="input-field"
                 >
                   <option value={USER_ROLES.USER}>User</option>
-                  <option value={USER_ROLES.MANAGER}>Manager</option>
                   <option value={USER_ROLES.ADMIN}>Admin</option>
                 </select>
               </div>
@@ -388,19 +485,21 @@ export default function TeamsAccess() {
         </div>
       )}
 
-      {/* Edit User Modal */}
       {showEditUser && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Edit User</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-lg">
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 pb-3 mb-4">
+              <div>
+                <p className="text-xs font-semibold text-gray-400 tracking-[0.2em]">CONTROL CENTER</p>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-1">Edit User</h3>
+              </div>
               <button onClick={() => setShowEditUser(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
               </button>
             </div>
             <form onSubmit={handleEditUser} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Full Name *</label>
                 <input
                   type="text"
                   value={editUser.name}
@@ -410,7 +509,9 @@ export default function TeamsAccess() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Email Address *
+                </label>
                 <input
                   type="email"
                   value={editUser.email}
@@ -419,12 +520,35 @@ export default function TeamsAccess() {
                   required
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Change Password (leave blank to keep current)
+                </label>
+                <input
+                  type="password"
+                  value={editUser.password}
+                  onChange={(e) => setEditUser({ ...editUser, password: e.target.value })}
+                  className="input-field"
+                  minLength={6}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role *</label>
+                <select
+                  value={editUser.role}
+                  onChange={(e) => setEditUser({ ...editUser, role: e.target.value })}
+                  className="input-field"
+                >
+                  <option value={USER_ROLES.USER}>User</option>
+                  <option value={USER_ROLES.ADMIN}>Admin</option>
+                </select>
+              </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowEditUser(false)} className="btn-secondary flex-1">
                   Cancel
                 </button>
                 <button type="submit" className="btn-primary flex-1">
-                  Save Changes
+                  Save
                 </button>
               </div>
             </form>
@@ -432,19 +556,23 @@ export default function TeamsAccess() {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Delete User</h3>
             <p className="text-gray-500 dark:text-gray-400 mb-4">
-              Are you sure you want to delete <strong>{selectedUser?.name}</strong>? This action cannot be undone.
+              Are you sure you want to delete the user account for{' '}
+              <strong className="text-gray-900 dark:text-white">{selectedUser?.name}</strong>? If yes, you will lose all
+              user-level data and other data.
             </p>
             <div className="flex gap-3">
               <button onClick={() => setShowDeleteConfirm(false)} className="btn-secondary flex-1">
                 Cancel
               </button>
-              <button onClick={handleDeleteUser} className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex-1">
+              <button
+                onClick={handleDeleteUser}
+                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex-1"
+              >
                 Delete
               </button>
             </div>

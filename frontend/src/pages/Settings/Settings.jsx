@@ -3,6 +3,7 @@ import { User, Bell, Shield, Palette, Save, Sun, Moon } from 'lucide-react'
 import { useAuthStore } from '../../store/auth.store'
 import { useUIStore } from '../../store/ui.store'
 import { getInitials, getAvatarColor } from '../../utils/helpers'
+import api from '../../services/api'
 
 export default function Settings() {
   const { user, updateUser } = useAuthStore()
@@ -45,8 +46,20 @@ export default function Settings() {
 
   const handleChangePassword = async (e) => {
     e.preventDefault()
+    if (!user?._id && !user?.id) {
+      setMessage({ type: 'error', text: 'Missing user profile. Please log in again.' })
+      return
+    }
     if (profile.newPassword !== profile.confirmPassword) {
       setMessage({ type: 'error', text: 'Passwords do not match' })
+      return
+    }
+    if (!profile.currentPassword || profile.currentPassword.length < 6) {
+      setMessage({ type: 'error', text: 'Current password is required' })
+      return
+    }
+    if (profile.newPassword.length < 6) {
+      setMessage({ type: 'error', text: 'New password must be at least 6 characters' })
       return
     }
     
@@ -54,11 +67,15 @@ export default function Settings() {
     setMessage(null)
     
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      const userId = user?._id || user?.id
+      await api.put(`/users/${userId}/password`, {
+        current_password: profile.currentPassword,
+        new_password: profile.newPassword
+      })
       setProfile({ ...profile, currentPassword: '', newPassword: '', confirmPassword: '' })
       setMessage({ type: 'success', text: 'Password changed successfully' })
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to change password' })
+      setMessage({ type: 'error', text: error.response?.data?.detail || 'Failed to change password' })
     } finally {
       setSaving(false)
     }

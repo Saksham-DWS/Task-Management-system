@@ -28,7 +28,11 @@ export const useAuth = () => {
       }
       return { user: userData, token }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Login failed')
+      if (err.response?.status === 401) {
+        setError('Incorrect login credentials. Please check your credentials again or reset the password with the admin.')
+      } else {
+        setError(err.response?.data?.detail || 'Login failed')
+      }
       throw err
     } finally {
       setLoading(false)

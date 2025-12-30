@@ -1,25 +1,27 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 
 export default function Login() {
-  const [isLogin, setIsLogin] = useState(true)
   const [formData, setFormData] = useState({
-    name: '',
     email: '',
     password: ''
   })
-  const { login, register, loading, error } = useAuth()
+  const { login, loading, error } = useAuth()
   const navigate = useNavigate()
+  const [toastMessage, setToastMessage] = useState('')
+
+  useEffect(() => {
+    if (!error) return
+    setToastMessage(error)
+    const timer = setTimeout(() => setToastMessage(''), 2500)
+    return () => clearTimeout(timer)
+  }, [error])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     try {
-      if (isLogin) {
-        await login(formData.email, formData.password)
-      } else {
-        await register(formData)
-      }
+      await login(formData.email, formData.password)
       navigate('/dashboard')
     } catch (err) {
       // Error is handled by useAuth hook
@@ -28,6 +30,13 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-black flex">
+      {toastMessage && (
+        <div className="fixed top-6 left-4 right-4 sm:left-auto sm:right-6 z-50">
+          <div className="sm:max-w-sm sm:ml-auto bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg shadow-lg">
+            {toastMessage}
+          </div>
+        </div>
+      )}
       {/* Left Side - Branding */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
         {/* Particle Background Effect */}
@@ -84,32 +93,12 @@ export default function Login() {
 
           {/* Form Header */}
           <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-              {isLogin ? 'Welcome back' : 'Create account'}
-            </h2>
-            <p className="text-gray-500 dark:text-gray-400 mt-2">
-              {isLogin ? 'Sign in to access your projects' : 'Get started with DWS Project Manager'}
-            </p>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Welcome back</h2>
+            <p className="text-gray-500 dark:text-gray-400 mt-2">Sign in to access your projects</p>
           </div>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
-            {!isLogin && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="John Doe"
-                  className="input-field"
-                  required={!isLogin}
-                />
-              </div>
-            )}
-
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Email Address
@@ -132,35 +121,20 @@ export default function Login() {
                 type="password"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                placeholder="••••••••"
+                placeholder="Enter your password"
                 className="input-field"
                 required
               />
             </div>
-
-            {error && (
-              <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400">
-                {error}
-              </div>
-            )}
 
             <button
               type="submit"
               disabled={loading}
               className="w-full bg-black dark:bg-white text-white dark:text-black font-semibold py-3 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors disabled:opacity-50"
             >
-              {loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Create Account')}
+              {loading ? 'Please wait...' : 'Sign In'}
             </button>
           </form>
-
-          <div className="mt-6 text-center">
-            <button
-              onClick={() => setIsLogin(!isLogin)}
-              className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-            >
-              {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
-            </button>
-          </div>
 
           {/* Demo credentials */}
           <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
@@ -170,7 +144,7 @@ export default function Login() {
                 <span className="font-medium">Admin:</span> admin@dws.com / admin123
               </p>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                <span className="font-medium">Manager:</span> john@dws.com / password123
+                <span className="font-medium">User:</span> john@dws.com / password123
               </p>
             </div>
           </div>

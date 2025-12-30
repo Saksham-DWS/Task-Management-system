@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
-from pydantic import Field, computed_field
+from pydantic import AliasChoices, Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,9 +23,18 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=_env_path, extra="allow")
 
     mongodb_url: str = Field(default="mongodb://localhost:27017/task-management-1")
-    secret_key: str = "dws-secret-key-change-in-production"
-    algorithm: str = "HS256"
-    access_token_expire_minutes: int = 1440
+    secret_key: str = Field(
+        default="dws-secret-key-change-in-production",
+        validation_alias=AliasChoices("JWT_SECRET", "SECRET_KEY")
+    )
+    algorithm: str = Field(
+        default="HS256",
+        validation_alias=AliasChoices("JWT_ALGORITHM", "ALGORITHM")
+    )
+    access_token_expire_minutes: int = Field(
+        default=1440,
+        validation_alias=AliasChoices("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "ACCESS_TOKEN_EXPIRE_MINUTES")
+    )
     openai_api_key: str = ""
     openai_model: str = "gpt-4.1-nano"
     ai_project_interval_hours: int = 48

@@ -10,6 +10,11 @@ class UserRole(str, Enum):
     USER = "user"
 
 
+class UserStatus(str, Enum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+
+
 class AccessControl(BaseModel):
     category_ids: List[str] = []
     project_ids: List[str] = []
@@ -35,6 +40,7 @@ class UserUpdate(BaseModel):
 class UserInDB(UserBase):
     id: str = Field(alias="_id")
     role: UserRole = UserRole.USER
+    status: UserStatus = UserStatus.ACTIVE
     access: AccessControl = AccessControl()
     created_at: datetime = datetime.utcnow()
     updated_at: datetime = datetime.utcnow()
@@ -46,6 +52,7 @@ class UserInDB(UserBase):
 class UserResponse(UserBase):
     id: str = Field(alias="_id")
     role: UserRole
+    status: UserStatus = UserStatus.ACTIVE
     access: AccessControl
 
     class Config:

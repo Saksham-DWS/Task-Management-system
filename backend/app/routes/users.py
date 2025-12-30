@@ -1,11 +1,10 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from bson import ObjectId
 from datetime import datetime
-from typing import List
 import re
 
 from ..database import get_users_collection
-from ..models import UserCreate, UserUpdate, UserResponse, UserRole
+from ..models import UserCreate, UserUpdate
 from ..services.auth import get_current_user, require_role, get_password_hash
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
@@ -35,7 +34,7 @@ async def get_user(user_id: str, current_user: dict = Depends(get_current_user))
 @router.post("")
 async def create_user(
     user_data: UserCreate,
-    current_user: dict = Depends(require_role(["admin", "manager"]))
+    current_user: dict = Depends(require_role(["admin"]))
 ):
     users = get_users_collection()
     
@@ -44,11 +43,15 @@ async def create_user(
     if existing:
         raise HTTPException(status_code=400, detail="Email already exists")
     
+    if len(user_data.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+
     user_dict = {
         "name": user_data.name,
         "email": user_data.email,
         "password": get_password_hash(user_data.password),
         "role": user_data.role.value,
+        "status": "active",
         "access": {"category_ids": [], "project_ids": [], "task_ids": []},
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
@@ -73,6 +76,19 @@ async def update_user(
         raise HTTPException(status_code=403, detail="Not authorized")
     
     update_data = {k: v for k, v in user_data.dict().items() if v is not None}
+    if "role" in update_data:
+        if current_user.get("role") != "admin":
+            raise HTTPException(status_code=403, detail="Not authorized to change role")
+        update_data.pop("role")
+
+    if "email" in update_data:
+        existing = await users.find_one({
+            "email": re.compile(f"^{re.escape(update_data['email'])}$", re.IGNORECASE),
+            "_id": {"$ne": ObjectId(user_id)}
+        })
+        if existing:
+            raise HTTPException(status_code=400, detail="Email already exists")
+
     if not update_data:
         raise HTTPException(status_code=400, detail="No data to update")
     
@@ -83,7 +99,7 @@ async def update_user(
         {"$set": update_data}
     )
     
-    if result.modified_count == 0:
+    if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
     
     user = await users.find_one({"_id": ObjectId(user_id)}, {"password": 0})
@@ -108,7 +124,7 @@ async def update_user_role(
         {"$set": {"role": new_role, "updated_at": datetime.utcnow()}}
     )
     
-    if result.modified_count == 0:
+    if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
     
     user = await users.find_one({"_id": ObjectId(user_id)}, {"password": 0})

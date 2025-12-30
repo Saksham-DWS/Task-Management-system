@@ -1,0 +1,108 @@
+**New Goal Context a feature addtion in the system which will be work and in sync with best Tailwind React UI frontend with backend and Backend Database syncing***
+
+1. New feature or editing a existing feature and functions is i want to refine a Access and account creation
+system in application with Power of JWT token and best authentication mechanism 
+
+Currently At Admin Panel level there is panel called Team & Access Panel where Admin can create accounts 
+for new user in the system and also give role base access to user like [Admin, User], 
+
+Like I want i my application that this account creation and Team & Access will work Robustly 
+
+In Team & Access Panel level : 
+
+Admin can only create User accounts with best authentication system , with new Account creation for user,
+
+also admin can edit the already created accounts 
+
+like this  : 
+
+--------------------------------------------------------------------------------------------------------+
+| NAME         | EMAIL                                   | ROLE       | STATUS      | ACTIONS           |
+------------------------------------------------------------------------------------+-------------------+
+| tarun gogia  | tarun.gogia@digitalwebsolutions.in      | ADMIN/User |    Active   | ✏️Edit  🗑️Delete |
+------------------------------------------------------------------------------------+-------------------+
+
+Like when Admin went in Team & Access Panel , 
+
+Clicks "Add User" -> so a Panel of user creation opens : 
+
+====================================================
+Add New User                                  [ ✕ ]
+====================================================
+
+Name *
+----------------------------------------------------
+[ ............................................... ]
+
+Email *
+----------------------------------------------------
+[ ............................................... ]
+
+Password *
+----------------------------------------------------
+[ ............................................... ]
+
+Role *
+----------------------------------------------------
+[ User ▼ ] options (User / Admin)
+
+----------------------------------------------------
+[ Cancel ]                           [ Add User ]
+====================================================
+
+If ADMIN seleted Got all admin level capabilites, and if user a normal user with account creation no project and category panel showing at intial untill alloted categories or projects, a normal user
+
+After user account will be created the new user name and all his details will be showing in the Teams & Access Panel Just like this  : 
+
+--------------------------------------------------------------------------------------------------------+
+| NAME         | EMAIL                                   | ROLE       | STATUS      | ACTIONS           |
+------------------------------------------------------------------------------------+-------------------+
+| tarun gogia  | tarun.gogia@digitalwebsolutions.in      | ADMIN/User |    Active   | ✏️Edit  🗑️Delete |
+------------------------------------------------------------------------------------+-------------------+
+
+and all n number of users will be showing there in Teams & Access Panel of Admin panel level
+any admin assinged user can have all admin level capabilites.
+
+Also infront of the user names and all data there will be account deletion and edit user button will be showing as well 
+
+If Admin wanted to edit any existing user details he will simpily click on edit button a edit user details and change
+password and set new password option will also be showing and also change the access role of the user those options also be showing 
+
+like this a new UI component open in middle screen with responsive design  : 
+
+====================================================
+CONTROL CENTER
+Edit User                                    [ ✕ ]
+====================================================
+
+Full Name *
+----------------------------------------------------
+[ tarun gogia ]
+
+Email Address *
+----------------------------------------------------
+[ tarun.gogia@digitalwebsolutions.in ]
+
+Change Password (leave blank to keep current)
+----------------------------------------------------
+[ ............................................... ]
+
+Role *
+----------------------------------------------------
+[ admin/user ▼ ]
+
+----------------------------------------------------
+[ Cancel ]                              [ Save ]
+====================================================
+
+so this type of UI should be following , also if admin choose to delete 
+a pop up alert comes "are you sure wanted to delete the user account if yes you will loose all user level data and other data".
+
+Update the required variables in the backend/ .env for example for JWT and Jwt exp timing and etc new variables.
+
+So Overall I want my Access based and user creations system will work seamlessly with Robust authentication system 
+with tech like bcrypt, jwt and etc required dependencies.
+
+Understand my thinking ,intent vision for these feature of team and access , with best UI and robust backend and robust authentication system making ,
+with best code quality , error free code, 
+

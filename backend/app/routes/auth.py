@@ -1,23 +1,26 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi.security import OAuth2PasswordRequestForm
-from bson import ObjectId
 from datetime import datetime
 import re
 
 from ..database import get_users_collection
-from ..models import UserCreate, UserResponse, UserLogin, Token
+from ..models import UserCreate, UserLogin, Token
 from ..services.auth import (
     get_password_hash, 
     verify_password, 
     create_access_token,
-    get_current_user
+    get_current_user,
+    require_role
 )
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 
 @router.post("/register", response_model=Token)
-async def register(user_data: UserCreate):
+async def register(
+    user_data: UserCreate,
+    _current_user: dict = Depends(require_role(["admin"]))
+):
     users = get_users_collection()
     
     # Check if user exists (case-insensitive)
@@ -28,12 +31,19 @@ async def register(user_data: UserCreate):
             detail="Email already registered"
         )
     
+    if len(user_data.password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 6 characters"
+        )
+
     # Create user
     user_dict = {
         "name": user_data.name,
         "email": user_data.email,
         "password": get_password_hash(user_data.password),
         "role": user_data.role.value,
+        "status": "active",
         "access": {"category_ids": [], "project_ids": [], "task_ids": []},
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
