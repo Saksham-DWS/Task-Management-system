@@ -27,6 +27,14 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440
     openai_api_key: str = ""
+    openai_model: str = "gpt-4.1-nano"
+    ai_project_interval_hours: int = 48
+    ai_admin_interval_hours: int = 72
+    ai_scheduler_poll_seconds: int = 600
+    ai_project_batch_size: int = 3
+    ai_project_task_limit: int = 40
+    ai_insights_jitter_minutes: int = 360
+    ai_scheduler_enabled: bool = True
 
     # Aliases for JWT settings
     @property

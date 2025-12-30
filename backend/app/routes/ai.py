@@ -1,9 +1,41 @@
 from fastapi import APIRouter, Depends
 from typing import List
 
-from ..database import get_tasks_collection, get_projects_collection
-from ..services.auth import get_current_user
+from ..database import get_tasks_collection, get_projects_collection, get_ai_insights_collection
+from ..services.auth import get_current_user, require_role
 from ..services.ai import generate_task_insights, get_ai_recommendations
+from ..services.ai_scheduler import generate_project_insight, generate_admin_insight, serialize_insight, schedule_project_insight
+
+
+def _normalize_id_list(ids):
+    if not ids:
+        return []
+    normalized = []
+    for value in ids:
+        if value is None:
+            continue
+        normalized.append(str(value))
+    return list(dict.fromkeys(normalized))
+
+
+def _has_project_access(current_user: dict, project: dict) -> bool:
+    role = current_user.get("role", "user")
+    if role in ["admin", "manager"]:
+        return True
+    current_user_id = str(current_user.get("_id"))
+    access = current_user.get("access", {}) or {}
+    category_id = str(project.get("category_id") or "")
+    if category_id in access.get("category_ids", []):
+        return True
+    if str(project.get("_id")) in access.get("project_ids", []):
+        return True
+    if str(project.get("owner_id")) == current_user_id:
+        return True
+    if current_user_id in _normalize_id_list(project.get("collaborator_ids")):
+        return True
+    if current_user_id in _normalize_id_list(project.get("access_user_ids")):
+        return True
+    return False
 
 router = APIRouter(prefix="/api/ai", tags=["AI"])
 
@@ -129,14 +161,19 @@ async def get_project_insights(
 ):
     """Get AI insights for a specific project"""
     from ..services.ai import generate_project_health, analyze_goals_vs_achievements
+    from bson import ObjectId
     
     projects = get_projects_collection()
     tasks = get_tasks_collection()
+    insights = get_ai_insights_collection()
     
-    project = await projects.find_one({"_id": __import__("bson").ObjectId(project_id)})
+    project = await projects.find_one({"_id": ObjectId(project_id)})
     if not project:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Project not found")
+    if not _has_project_access(current_user, project):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Not authorized to view this project")
     
     # Get project tasks
     task_list = []
@@ -155,6 +192,8 @@ async def get_project_insights(
     
     # Generate task insights
     task_insights = await generate_task_insights(task_list)
+
+    ai_doc = await insights.find_one({"scope": "project", "project_id": project_id})
     
     return {
         "health_score": health_score,
@@ -162,5 +201,65 @@ async def get_project_insights(
         "task_insights": task_insights,
         "task_count": len(task_list),
         "completed_count": len([t for t in task_list if t.get("status") == "completed"]),
-        "blocked_count": len([t for t in task_list if t.get("status") in ["blocked", "on_hold"]])
+        "blocked_count": len([t for t in task_list if t.get("status") in ["blocked", "on_hold", "hold"]]),
+        "ai_insight": serialize_insight(ai_doc)
     }
+
+
+@router.get("/projects/{project_id}/insights")
+async def get_project_ai_insights(
+    project_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    projects = get_projects_collection()
+    insights = get_ai_insights_collection()
+    from bson import ObjectId
+
+    project = await projects.find_one({"_id": ObjectId(project_id)})
+    if not project:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Project not found")
+    if not _has_project_access(current_user, project):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Not authorized to view this project")
+
+    await schedule_project_insight(project_id, project.get("created_at"))
+    doc = await insights.find_one({"scope": "project", "project_id": project_id})
+    return {"insight": serialize_insight(doc)}
+
+
+@router.post("/projects/{project_id}/generate")
+async def generate_project_ai(
+    project_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    projects = get_projects_collection()
+    from bson import ObjectId
+
+    project = await projects.find_one({"_id": ObjectId(project_id)})
+    if not project:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Project not found")
+    if not _has_project_access(current_user, project):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Not authorized to generate insights for this project")
+
+    payload = await generate_project_insight(project_id, triggered_by=str(current_user.get("_id")))
+    return {"insight": serialize_insight(payload)}
+
+
+@router.get("/admin/insights")
+async def get_admin_insights(
+    current_user: dict = Depends(require_role(["admin", "manager"]))
+):
+    insights = get_ai_insights_collection()
+    doc = await insights.find_one({"scope": "admin"})
+    return {"insight": serialize_insight(doc)}
+
+
+@router.post("/admin/generate")
+async def generate_admin_ai(
+    current_user: dict = Depends(require_role(["admin", "manager"]))
+):
+    payload = await generate_admin_insight(triggered_by=str(current_user.get("_id")))
+    return {"insight": serialize_insight(payload)}

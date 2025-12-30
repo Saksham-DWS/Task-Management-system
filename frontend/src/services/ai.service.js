@@ -6,6 +6,11 @@ export const aiService = {
     return response.data
   },
 
+  generateProjectInsights: async (projectId) => {
+    const response = await api.post(`/ai/projects/${projectId}/generate`)
+    return response.data
+  },
+
   getCategoryInsights: async (categoryId) => {
     const response = await api.get(`/ai/categories/${categoryId}/insights`)
     return response.data
@@ -42,7 +47,17 @@ export const aiService = {
   },
 
   getOverallInsights: async () => {
-    const response = await api.get('/ai/insights')
+    const response = await api.get('/ai/admin/insights')
+    return response.data
+  },
+
+  getAdminInsights: async () => {
+    const response = await api.get('/ai/admin/insights')
+    return response.data
+  },
+
+  generateAdminInsights: async () => {
+    const response = await api.post('/ai/admin/generate')
     return response.data
   }
 }

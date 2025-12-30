@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
-import { Bot, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Users, BarChart3 } from 'lucide-react'
+import { Bot, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, BarChart3, RefreshCw } from 'lucide-react'
 import { aiService } from '../../services/ai.service'
 import { categoryService } from '../../services/category.service'
 import { projectService } from '../../services/project.service'
-import AIInsightCard from '../../components/AI/AIInsightCard'
+import { formatDateTime } from '../../utils/helpers'
 
 export default function Insights() {
   const [loading, setLoading] = useState(true)
-  const [insights, setInsights] = useState([])
+  const [adminInsight, setAdminInsight] = useState(null)
+  const [refreshing, setRefreshing] = useState(false)
   const [categories, setCategories] = useState([])
   const [projects, setProjects] = useState([])
   const [stats, setStats] = useState({
@@ -16,6 +17,48 @@ export default function Insights() {
     atRisk: 0,
     needsAttention: 0
   })
+
+  const splitParagraphs = (text) =>
+    (text || '')
+      .split(/\n+/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+
+  const buildHighlightText = (text, terms) => {
+    if (!text) return ''
+    let output = text
+    terms.forEach((term) => {
+      if (!term || term.length < 3) return
+      const token = `**${term}**`
+      if (output.includes(token)) return
+      output = output.split(term).join(token)
+    })
+    return output
+  }
+
+  const renderWithBold = (text) => {
+    if (!text) return null
+    const lines = String(text).split('\n')
+    return lines.map((line, lineIndex) => {
+      const segments = line.split(/(\*\*[^*]+\*\*)/g).filter(Boolean)
+      return (
+        <span key={`line-${lineIndex}`}>
+          {segments.map((segment, index) => {
+            if (segment.startsWith('**') && segment.endsWith('**')) {
+              const value = segment.slice(2, -2)
+              return (
+                <strong key={`seg-${lineIndex}-${index}`} className="font-semibold text-primary-700">
+                  {value}
+                </strong>
+              )
+            }
+            return <span key={`seg-${lineIndex}-${index}`}>{segment}</span>
+          })}
+          {lineIndex < lines.length - 1 ? <br /> : null}
+        </span>
+      )
+    })
+  }
 
   useEffect(() => {
     loadData()
@@ -32,7 +75,7 @@ export default function Insights() {
       
       setCategories(categoriesData)
       setProjects(projectsData)
-      setInsights(insightsData?.insights || generateMockInsights(projectsData))
+      setAdminInsight(insightsData?.insight || null)
       
       // Calculate stats
       const onTrack = projectsData.filter(p => p.healthScore >= 70).length
@@ -47,47 +90,22 @@ export default function Insights() {
       })
     } catch (error) {
       console.error('Failed to load insights:', error)
-      // Generate mock insights on error
-      setInsights(generateMockInsights([]))
+      setAdminInsight(null)
     } finally {
       setLoading(false)
     }
   }
 
-  const generateMockInsights = (projectsData) => {
-    const insights = []
-    
-    const blockedProjects = projectsData.filter(p => p.status === 'hold')
-    if (blockedProjects.length > 0) {
-      insights.push({
-        type: 'warning',
-        title: 'Projects On Hold',
-        message: `${blockedProjects.length} project${blockedProjects.length > 1 ? 's are' : ' is'} currently on hold. Review and take action.`
-      })
+  const handleGenerateAdminInsights = async () => {
+    setRefreshing(true)
+    try {
+      const data = await aiService.generateAdminInsights()
+      setAdminInsight(data?.insight || null)
+    } catch (error) {
+      console.error('Failed to generate admin insights:', error)
+    } finally {
+      setRefreshing(false)
     }
-
-    const completedProjects = projectsData.filter(p => p.status === 'completed')
-    if (completedProjects.length > 0) {
-      insights.push({
-        type: 'success',
-        title: 'Completed Projects',
-        message: `${completedProjects.length} project${completedProjects.length > 1 ? 's have' : ' has'} been completed. Great work!`
-      })
-    }
-
-    insights.push({
-      type: 'insight',
-      title: 'Weekly Performance',
-      message: 'Task completion rate is trending upward compared to last week.'
-    })
-
-    insights.push({
-      type: 'positive',
-      title: 'Team Productivity',
-      message: 'Team velocity has improved by 15% this month.'
-    })
-
-    return insights
   }
 
   if (loading) {
@@ -97,6 +115,25 @@ export default function Insights() {
       </div>
     )
   }
+
+  const highlightTerms = [
+    ...categories.map((item) => item.name).filter(Boolean).slice(0, 8),
+    ...projects.map((item) => item.name).filter(Boolean).slice(0, 8)
+  ]
+
+  const analysisText = buildHighlightText(adminInsight?.analysis, highlightTerms)
+  const recommendationText = buildHighlightText(adminInsight?.recommendations, highlightTerms)
+  const analysisParagraphs = splitParagraphs(analysisText)
+  const recommendationParagraphs = splitParagraphs(recommendationText)
+  const focusArea = adminInsight?.focus_area || adminInsight?.focusArea
+  const teamBalance = adminInsight?.team_balance || adminInsight?.teamBalance
+  const quickWin = adminInsight?.quick_win || adminInsight?.quickWin
+  const categorySummaries = adminInsight?.category_summaries || adminInsight?.categorySummaries || []
+  const projectSummaries = adminInsight?.project_summaries || adminInsight?.projectSummaries || []
+  const generatedAt = adminInsight?.generated_at || adminInsight?.generatedAt
+  const nextDueAt = adminInsight?.next_due_at || adminInsight?.nextDueAt
+  const lastAttemptAt = adminInsight?.last_attempt_at || adminInsight?.lastAttemptAt
+  const aiError = adminInsight?.ai_error || adminInsight?.aiError
 
   return (
     <div className="space-y-6">
@@ -157,26 +194,82 @@ export default function Insights() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* AI Insights */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <div className="card">
-          <div className="flex items-center gap-2 mb-4">
-            <Bot className="text-primary-600" size={20} />
-            <h2 className="font-semibold text-gray-900">AI Analysis</h2>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Bot className="text-primary-600" size={20} />
+              <h2 className="font-semibold text-gray-900">AI Analysis</h2>
+            </div>
+            <button
+              onClick={handleGenerateAdminInsights}
+              disabled={refreshing}
+              className="btn-secondary flex items-center gap-2"
+            >
+              <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+              {refreshing ? 'Refreshing' : 'Refresh'}
+            </button>
           </div>
-          <div className="space-y-3">
-            {insights.map((insight, index) => (
-              <AIInsightCard
-                key={index}
-                type={insight.type}
-                title={insight.title}
-                message={insight.message}
-              />
-            ))}
+          <div className="flex flex-wrap gap-3 text-xs text-gray-500 mb-4">
+            <span>Last generated: {generatedAt ? formatDateTime(generatedAt) : 'Not generated yet'}</span>
+            {lastAttemptAt && <span>Last attempt: {formatDateTime(lastAttemptAt)}</span>}
+            <span>Next auto refresh: {nextDueAt ? formatDateTime(nextDueAt) : 'Scheduled'}</span>
+            {adminInsight?.source && <span>Source: {adminInsight.source}</span>}
+            {aiError && <span className="text-red-500">AI error: {String(aiError).slice(0, 160)}</span>}
           </div>
+          {analysisParagraphs.length > 0 ? (
+            <div className="space-y-3 text-sm text-gray-700 leading-relaxed">
+              {analysisParagraphs.map((paragraph, index) => (
+                <p key={`analysis-${index}`}>{renderWithBold(paragraph)}</p>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 text-center py-6">No AI analysis yet. Click Refresh to generate.</p>
+          )}
         </div>
 
-        {/* Project Health Overview */}
+        <div className="card">
+          <div className="flex items-center gap-2 mb-4">
+            <Bot className="text-purple-600" size={20} />
+            <h2 className="font-semibold text-gray-900">AI Recommendations</h2>
+          </div>
+          <div className="space-y-3">
+            {focusArea && (
+              <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                <p className="text-sm text-purple-700">
+                  <strong>Focus Area:</strong> {renderWithBold(buildHighlightText(focusArea, highlightTerms))}
+                </p>
+              </div>
+            )}
+            {teamBalance && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-700">
+                  <strong>Team Balance:</strong> {renderWithBold(buildHighlightText(teamBalance, highlightTerms))}
+                </p>
+              </div>
+            )}
+            {quickWin && (
+              <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                <p className="text-sm text-green-700">
+                  <strong>Quick Win:</strong> {renderWithBold(buildHighlightText(quickWin, highlightTerms))}
+                </p>
+              </div>
+            )}
+          </div>
+          {recommendationParagraphs.length > 0 && (
+            <div className="mt-4 space-y-3 text-sm text-gray-700 leading-relaxed">
+              {recommendationParagraphs.map((paragraph, index) => (
+                <p key={`rec-${index}`}>{renderWithBold(paragraph)}</p>
+              ))}
+            </div>
+          )}
+          {!recommendationParagraphs.length && !focusArea && !teamBalance && !quickWin && (
+            <p className="text-sm text-gray-400 text-center py-6">No AI recommendations yet. Click Refresh to generate.</p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <div className="card">
           <div className="flex items-center gap-2 mb-4">
             <TrendingUp className="text-green-600" size={20} />
@@ -190,7 +283,7 @@ export default function Insights() {
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-gray-900 truncate">{project.name}</p>
                     <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden mt-1">
-                      <div 
+                      <div
                         className={`h-full rounded-full ${
                           healthScore >= 70 ? 'bg-green-500' :
                           healthScore >= 40 ? 'bg-yellow-500' : 'bg-red-500'
@@ -214,7 +307,6 @@ export default function Insights() {
           </div>
         </div>
 
-        {/* Category Performance */}
         <div className="card">
           <div className="flex items-center gap-2 mb-4">
             <BarChart3 className="text-blue-600" size={20} />
@@ -246,29 +338,44 @@ export default function Insights() {
             )}
           </div>
         </div>
+      </div>
 
-        {/* Recommendations */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <div className="card">
           <div className="flex items-center gap-2 mb-4">
-            <Bot className="text-purple-600" size={20} />
-            <h2 className="font-semibold text-gray-900">AI Recommendations</h2>
+            <BarChart3 className="text-blue-600" size={20} />
+            <h2 className="font-semibold text-gray-900">Category Insights</h2>
           </div>
           <div className="space-y-3">
-            <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
-              <p className="text-sm text-purple-700">
-                <strong>Focus Area:</strong> Review blocked tasks in projects with low health scores to improve overall velocity.
-              </p>
-            </div>
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm text-blue-700">
-                <strong>Team Balance:</strong> Consider redistributing tasks among team members to prevent overload.
-              </p>
-            </div>
-            <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-              <p className="text-sm text-green-700">
-                <strong>Quick Win:</strong> Complete tasks that are close to deadline first to maintain momentum.
-              </p>
-            </div>
+            {categorySummaries.length > 0 ? (
+              categorySummaries.map((item, index) => (
+                <div key={item.category_id || index} className="p-3 bg-gray-50 rounded-lg">
+                  <p className="font-medium text-gray-900">{item.name || 'Category'}</p>
+                  <p className="text-sm text-gray-600 mt-1">{item.insight}</p>
+                </div>
+              ))
+            ) : (
+              <p className="text-gray-400 text-center py-4">No category insights yet.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="flex items-center gap-2 mb-4">
+            <TrendingUp className="text-green-600" size={20} />
+            <h2 className="font-semibold text-gray-900">Project Insights</h2>
+          </div>
+          <div className="space-y-3">
+            {projectSummaries.length > 0 ? (
+              projectSummaries.map((item, index) => (
+                <div key={item.project_id || index} className="p-3 bg-gray-50 rounded-lg">
+                  <p className="font-medium text-gray-900">{item.name || 'Project'}</p>
+                  <p className="text-sm text-gray-600 mt-1">{item.insight}</p>
+                </div>
+              ))
+            ) : (
+              <p className="text-gray-400 text-center py-4">No project insights yet.</p>
+            )}
           </div>
         </div>
       </div>

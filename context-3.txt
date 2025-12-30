@@ -5,7 +5,90 @@ DB
 
 1. New Feature i wanted to add is AI Insights generation at Project level and at the admin insight panel level
 
--At Project level each Project insights will be Generated 
+-At Project level each Project at each project + its tasks insights will be Generated 
 -And At Admin panel of Insights level full categories > Projects > and there related task level insights will be generated
 
+I have A Open API key at my backend .env file, set a RAG pipeline with system prompt to AI in backend and it is sync with forntend UI and DataBase, 
+where 
+
+for example : 
+
+****1
+1st how the Project level AI insights will work  :  At for project the AI should gather the data from project and
+its tasks ,  and also from it goal & Achievements Panel where
+what AI Do is read the goal loggings and their achievement replies and compare the goal and achievements according to 
+their replies and if the goal logg and after 7 day reply matches the goal AI generate a good health report 
+under a topic od goals & Achievements at project level,
+
+Also at task level there will be multiple tasks under a project at various stages so also AI know the project level data and all tasks 
+data to generate the insights , also at task level ai also took data of goals and achievements from each tasks , and also analyse and contribute to
+the project level insights
+
+the Parameters the AI Generate the insights at Project AI Recomdation/Insights Panel is 
+
+Under Project Level AI Insights Generations  : 
+
+AI Citation, AI Recomendation 
+1st At Project level Project Goal Achievements AI understant the date and Goal & Achievements Logs, 
+2nd At Project tasks level AI got all project level all tasks data and their Goals & Achievements Logs, their current stage,
+their due date , and all data of project from project level.
+
+It will Generate AI Insights and Recomendation at Project level Insights Panel in approx 150-200 Words,
+
+example : AI Insights/Recommendation
+   
+   1st it will generate a overall Project level insights with recommendation and overall health and priorities and on etc parameters,
+
+   2nd in under it, it will generate each task level insights with health and recommendations
+
+   like : task 1 : ............................................
+        task 2 : .............................................
+        task 3 : .............................................
+        task 4 : .............................................
+        task 5 : .............................................
+
+Like this the AI recommendation system will work at Project Level in insights Panel at Project level
+and also Give a UI Button "Generate" so all data of project level went to AI and AI response and Dump the 
+Insights with best UI and DataBase , Backend and AI pipeline syncing so all project level insights will be shown whenver
+the Generate insights will be click generally it is a API request for manually generating the insight with fresh data went to AI 
+and insights will be dumpped in the manner i stated above.
+
+Also there be a system logic so system on each 2 days System initiate a request to the AI with fresh and current data to generate Insights at Project levels,
+
+There are n number of project and the system should have n number of data , so maybe Ai could be overlaod so
+kindly manage the Insights generation of each project with best solutions so AI could not be overwhelmed and make api call 
+accordingly when creation of project after 2 days or each 2 days after , so each project Auto insights generations will not be overloaded and cross and overwhelmed.
+
+*****2
+
+Insights Generation at Admin panel Insights panel level 
+
+We will generate AI analysis and AI insights and Recommendation at Insights Panel at Admin panel level in left side bar component.
+
+At Insights level Our AI Got ALL data of the system like current date weather of all categories, projects and their tasks and users as well
+
+AI will generate tasks on basis categories health, categories performance,
+project health, project performance, with also getting each projects tasks level data too, 
+
+At AI analysis : 
+-Generates AI analysis about project , tasks, categories and user work done insights taking data form project goals & achivement amd comments too,
+
+AT AI Recommendations : 
+-generate AI recommendation and health report : 
+-On Parameters of categories, projects and each projects tasks level
+-Focus Area: 
+-Team Balance:
+Quick Win:
+
+with each categories  : project  : 30 words AI insight info 
+                       and each project 20 word insight 
+
+Like generating atleast 1000-1500 words AI Recommendation at Admin Insights Panel level
+By getting fresh data on every 3 days as our system make API call in every 3 days 
+with AI Information dumping with good UI and text and recommendation Formating.
+with backend and DB and AI pipeline syncing.
+
+Also we will give a Ui button on Admin Insights panel on AI Analyis and AI Recomdation component with a refresh 
+button so it will be a manual trigger to make a API call to generate AI insights with current data of the application taking the date of 
+Categories, Projects, And Projects tasks and user performances etc then generate rhe AI Analyis & AI recommendation At the moment.
 

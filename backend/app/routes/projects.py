@@ -14,6 +14,7 @@ from ..database import (
 from ..models import ProjectCreate, ProjectUpdate
 from ..services.auth import get_current_user, require_role
 from ..services.ai import generate_project_health
+from ..services.ai_scheduler import schedule_project_insight
 
 router = APIRouter(prefix="/api/projects", tags=["Projects"])
 
@@ -454,6 +455,7 @@ async def create_project(
     # Sync project_id into user access lists for project-level owners/managers
     if access_user_ids:
         await sync_user_project_access(project_dict["_id"], access_user_ids, [])
+    await schedule_project_insight(project_dict["_id"], project_dict.get("created_at"))
     return await populate_project(project_dict)
 
 
@@ -638,6 +640,10 @@ async def delete_project(
     result = await projects.delete_one({"_id": ObjectId(project_id)})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    from ..database import get_ai_insights_collection
+    insights = get_ai_insights_collection()
+    await insights.delete_one({"scope": "project", "project_id": project_id})
     
     # Clean up user access entries
     users = get_users_collection()

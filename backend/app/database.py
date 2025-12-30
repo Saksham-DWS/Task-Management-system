@@ -49,3 +49,7 @@ def get_comments_collection():
 
 def get_notifications_collection():
     return db["notifications"]
+
+
+def get_ai_insights_collection():
+    return db["ai_insights"]

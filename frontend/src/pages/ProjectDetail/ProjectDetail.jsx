@@ -1,25 +1,26 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { DragDropContext } from '@hello-pangea/dnd'
-import { ArrowLeft, Settings, Target, Trophy, Users, BarChart3, Plus, CalendarDays, Send, Paperclip, Image } from 'lucide-react'
+import { ArrowLeft, Settings, Target, Trophy, BarChart3, Plus, CalendarDays, Send, Paperclip, Image } from 'lucide-react'
 import { useUIStore } from '../../store/ui.store'
 import { useAuthStore } from '../../store/auth.store'
 import { useAccess } from '../../hooks/useAccess'
 import { projectService } from '../../services/project.service'
 import { taskService } from '../../services/task.service'
+import { aiService } from '../../services/ai.service'
 import api from '../../services/api'
 import KanbanColumn from '../../components/Kanban/KanbanColumn'
 import NewTaskModal from '../../components/Modals/NewTaskModal'
 import EditProjectModal from '../../components/Modals/EditProjectModal'
 import ActivityLogModal from '../../components/Modals/ActivityLogModal'
-import AISummary from '../../components/AI/AISummary'
+import ProjectAIInsights from '../../components/AI/ProjectAIInsights'
 import { groupTasksByStatus, calculateProgress, getInitials, getAvatarColor, formatDate, formatDateTime, getRelativeTime } from '../../utils/helpers'
 import { PROJECT_STATUS_COLORS, PROJECT_STATUS_LABELS, TASK_STATUS, TASK_STATUS_ORDER, normalizeTaskStatus } from '../../utils/constants'
 
 export default function ProjectDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { activeModal, openModal, closeModal, modalData } = useUIStore()
+  const { activeModal, openModal, modalData } = useUIStore()
   const { user } = useAuthStore()
   const { canCreateInProject } = useAccess()
 
@@ -37,6 +38,8 @@ export default function ProjectDetail() {
   const [newComment, setNewComment] = useState('')
   const [replyDrafts, setReplyDrafts] = useState({})
   const [attachments, setAttachments] = useState([])
+  const [aiInsight, setAiInsight] = useState(null)
+  const [aiLoading, setAiLoading] = useState(false)
   const fileInputRef = useRef(null)
 
   useEffect(() => {
@@ -46,11 +49,12 @@ export default function ProjectDetail() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [projectData, tasksData, usersData, commentsData] = await Promise.all([
+      const [projectData, tasksData, usersData, commentsData, aiData] = await Promise.all([
         projectService.getById(id),
         taskService.getByProject(id),
         api.get('/users').then(res => res.data).catch(() => []),
-        projectService.getComments(id)
+        projectService.getComments(id),
+        aiService.getProjectInsights(id).catch(() => null)
       ])
       setProject(projectData)
       setTasks(tasksData)
@@ -58,10 +62,23 @@ export default function ProjectDetail() {
       setGoals(projectData.weeklyGoals || projectData.weekly_goals || [])
       setActivity(projectData.activity || [])
       setComments(commentsData)
+      setAiInsight(aiData?.insight || null)
     } catch (error) {
       console.error('Failed to load project:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleGenerateAiInsights = async () => {
+    setAiLoading(true)
+    try {
+      const data = await aiService.generateProjectInsights(id)
+      setAiInsight(data?.insight || null)
+    } catch (error) {
+      console.error('Failed to generate AI insights:', error)
+    } finally {
+      setAiLoading(false)
     }
   }
 
@@ -758,41 +775,13 @@ export default function ProjectDetail() {
         </div>
       )}
       {activeTab === 'insights' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <AISummary 
-            title="Project Health"
-            healthScore={progress}
-            insights={[
-              { type: 'insight', message: `${tasks.length} total tasks in this project` },
-              { type: groupedTasks.blocked?.length > 0 ? 'warning' : 'positive', 
-                message: groupedTasks.blocked?.length > 0 
-                  ? `${groupedTasks.blocked.length} tasks are blocked`
-                  : 'No blocked tasks' },
-              { type: groupedTasks.completed?.length > 0 ? 'success' : 'insight',
-                message: `${groupedTasks.completed?.length || 0} tasks completed` }
-            ]}
-          />
-          <div className="card">
-            <h3 className="font-semibold text-gray-900 mb-4">AI Recommendations</h3>
-            <div className="space-y-3">
-              {progress < 50 && (
-                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-700">
-                  Consider reducing scope or extending deadline - only {progress}% of goals achieved.
-                </div>
-              )}
-              {groupedTasks.blocked?.length > 2 && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-                  Multiple blocked tasks detected. Review and resolve blockers to improve velocity.
-                </div>
-              )}
-              {progress >= 70 && (
-                <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
-                  Great progress! Project is on track to meet weekly goals.
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <ProjectAIInsights
+          insight={aiInsight}
+          loading={aiLoading}
+          onGenerate={handleGenerateAiInsights}
+          tasks={tasks}
+          projectName={project?.name}
+        />
       )}
 
       {/* Modal */}
