@@ -125,6 +125,13 @@ async def send_email_async(to_email: str, subject: str, body: str) -> None:
     await asyncio.to_thread(_send_email_sync, to_email, subject, body)
 
 
+async def _safe_send_email(to_email: str, subject: str, body: str) -> None:
+    try:
+        await send_email_async(to_email, subject, body)
+    except Exception as exc:
+        print(f"Email send failed for {to_email}: {exc}")
+
+
 def _normalize_user_ids(user_ids: Iterable) -> list[str]:
     normalized = []
     for uid in user_ids or []:
@@ -263,10 +270,7 @@ async def dispatch_notification(
                 continue
             if not user.get("email"):
                 continue
-            try:
-                await send_email_async(user["email"], subject, body)
-            except Exception as exc:
-                print(f"Email send failed for {user.get('email')}: {exc}")
+            asyncio.create_task(_safe_send_email(user["email"], subject, body))
 
 
 async def build_weekly_digest(user: dict, window_start: datetime, window_end: datetime) -> dict | None:

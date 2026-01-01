@@ -101,4 +101,61 @@ Add admin‑side audit logs + notification templates.
 
 Hey You have full code base access , 
 
-I want to increase the in app actions syncablility , for example when a user creates a task it took 3-4 sec to load and show yes the task has been assigned , or if admin move the task from Not started to in-progress or any other forward stage , the application took moment to show the action syncing , for example this happend the moment , i drag from Not selected to inprogress , and at 1 sec spam i click on activity log of project level no log has been shown to that of a action and whn i refresh the browser manually then i see the logg of that action , which very unaccptable, it should load the moment i done any action , in the moment application should take 1 sec but it should show the actions logging or actions effect i the minutes of seconds like in 1.1s second i want the my application all actions syncablility to be fast so when my application is used by people at in scale like for example if 1000+ employees or a company user who are 1000+ and are using the application at the same time , my application should have to be fast enough that they did'nt think what project they bought it is disguting very slow, so thats why i want my application very actions reaction should takes place in 1's of second like in flintch , kindly do the need optimizations in my full code base so that , when i do any action for example  :  i moved a project as a project owner or admin from 'Not Started' stage to 'On Hold' or any stage forward the moment i done the action , and the moment i check actvity log i should see the action logging , and at the same time the user got the task a see the status has been changed also also see internal notfication for this stage moving action via admin/project owner at the moment , like this example in full application i want full syncing works in 1-2 seconds best performance and syncing optimization I want
+I want to increase the in app actions syncablility , for example when a user creates a task it took 3-4 sec to load and 
+show yes the task has been assigned , or if admin move the task from Not started to in-progress or any other forward stage , 
+the application took moment to show the action syncing , for example this happend the moment , i drag from Not selected to inprogress
+, and at 1 sec spam i click on activity log of project level no log has been shown to that of a action and whn i refresh the browser 
+manually then i see the logg of that action , which very unaccptable, it should load the moment i done any action , in the moment application should 
+take 1 sec but it should show the actions logging or actions effect i the minutes of seconds like in 1.1s second i want the my application all 
+actions syncablility to be fast so when my application is used by people at in scale like for example if 1000+ employees or a company user who are
+1000+ and are using the application at the same time , my application should have to be fast enough that they did'nt think what project
+they bought it is disguting very slow, so thats why i want my application very actions reaction should takes place in 1's of second like in flintch , 
+kindly do the need optimizations in my full code base so that , when i do any action for example  :  i moved a project as a project owner or admin from 
+'Not Started' stage to 'On Hold' or any stage forward the moment i done the action , and the moment i check actvity log i should see the action logging ,
+and at the same time the user got the task a see the status has been changed also also see internal notfication for this stage moving action via admin/project owner 
+at the moment , like this example in full application i want full syncing works in 1-2 seconds best performance and syncing optimization I want
+
+
+
+Best Optimization :  If you want true cross‑user realtime (other users see updates in 1–2s without polling), I can add WebSocket/SSE updates; that’s 
+the proper approach for 1000+ concurrent users.
+
+
+*****Q1 : currently how many current active user can do actions with 0-1 sec flintch actions reaction time , like 1-2 sec syncing ? 
+
+*****AI Ans : I can’t give a reliable number from the code alone — it depends on your server size (CPU/RAM), DB latency, network, and whether you run single node or a scaled setup.
+
+Right now the app is REST + polling (no realtime push), so “0–1s” reactions are mostly local‑UI optimistic updates; cross‑user sync will depend on API response time and polling interval.
+
+If you want a real capacity estimate, I need:
+
+Where it’s hosted (local, VPS, AWS, etc.)
+CPU/RAM and DB type/latency
+Expected concurrent users and request rate
+I can also add a simple load test script to measure your actual 1–2s SLA with realistic usage.
+
+
+*****Q2 : If my company have 400+ empolyee and or if i take large number example 2000+ employess how the proper scalling level syncing works like 1-2 sec delay only and actions 
+to reactions time like big applications like asana or jira
+
+
+******AI ANS  : For 400–2000 employees with 1–2s cross‑user syncing like Asana/Jira, you need real‑time push + horizontal scaling. With the current REST + polling model, only the acting
+                user sees instant updates; everyone else waits on polling or refresh.
+
+What “proper scaling” looks like for 1–2s sync:
+
+Real‑time layer: WebSocket or SSE to push updates to all connected users (no waiting for manual refresh).
+Event flow: write DB → publish event → push to clients → update UI.
+Horizontal app scaling: multiple FastAPI instances behind a load balancer.
+Shared state: Redis pub/sub (or message queue) so all app instances broadcast updates.
+Database: MongoDB replica set with indexes on hot queries (tasks, notifications, activity, project_id, user_id).
+Background jobs: email/weekly digest moved to workers (not on request path).
+Rough expectation:
+
+Single server + single Mongo = ok for small teams, but not consistent 1–2s for 1000+ users.
+For 400–2000 active users, plan for multiple app instances + Redis + replicated DB.
+If you want, I can implement:
+
+WebSocket/SSE live updates for tasks, activity, notifications.
+Redis pub/sub + background worker.
+Load testing script to measure real 1–2s SLA on your hardware.

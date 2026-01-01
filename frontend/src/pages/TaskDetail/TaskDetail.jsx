@@ -71,8 +71,22 @@ export default function TaskDetail() {
       return
     }
     try {
-      await taskService.updateStatus(id, newStatus)
-      setTask({ ...task, status: newStatus })
+      const statusLabel = TASK_STATUS_LABELS[normalizedTarget] || newStatus
+      const entry = {
+        description: `Status changed to ${statusLabel} by ${user?.name || 'Unknown'}`,
+        timestamp: new Date().toISOString(),
+        user: user?.name || 'Unknown',
+        user_id: user?._id || user?.id
+      }
+      setTask((prev) => prev ? {
+        ...prev,
+        status: newStatus,
+        activity: [entry, ...(prev.activity || [])]
+      } : prev)
+      const updated = await taskService.updateStatus(id, newStatus)
+      if (updated) {
+        setTask(updated)
+      }
     } catch (error) {
       console.error('Failed to update status:', error)
     }

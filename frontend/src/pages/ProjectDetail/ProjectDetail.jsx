@@ -15,7 +15,7 @@ import EditProjectModal from '../../components/Modals/EditProjectModal'
 import ActivityLogModal from '../../components/Modals/ActivityLogModal'
 import ProjectAIInsights from '../../components/AI/ProjectAIInsights'
 import { groupTasksByStatus, calculateProgress, getInitials, getAvatarColor, formatDate, formatDateTime, getRelativeTime } from '../../utils/helpers'
-import { PROJECT_STATUS_COLORS, PROJECT_STATUS_LABELS, TASK_STATUS, TASK_STATUS_ORDER, normalizeTaskStatus } from '../../utils/constants'
+import { PROJECT_STATUS_COLORS, PROJECT_STATUS_LABELS, TASK_STATUS, TASK_STATUS_LABELS, TASK_STATUS_ORDER, normalizeTaskStatus } from '../../utils/constants'
 
 export default function ProjectDetail() {
   const { id } = useParams()
@@ -49,12 +49,11 @@ export default function ProjectDetail() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [projectData, tasksData, usersData, commentsData, aiData] = await Promise.all([
+      const [projectData, tasksData, usersData, commentsData] = await Promise.all([
         projectService.getById(id),
         taskService.getByProject(id),
         api.get('/users').then(res => res.data).catch(() => []),
-        projectService.getComments(id),
-        aiService.getProjectInsights(id).catch(() => null)
+        projectService.getComments(id)
       ])
       setProject(projectData)
       setTasks(tasksData)
@@ -62,11 +61,45 @@ export default function ProjectDetail() {
       setGoals(projectData.weeklyGoals || projectData.weekly_goals || [])
       setActivity(projectData.activity || [])
       setComments(commentsData)
-      setAiInsight(aiData?.insight || null)
     } catch (error) {
       console.error('Failed to load project:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab !== 'insights' || !id) return
+    const loadInsights = async () => {
+      try {
+        const aiData = await aiService.getProjectInsights(id).catch(() => null)
+        setAiInsight(aiData?.insight || null)
+      } catch (error) {
+        console.error('Failed to load AI insights:', error)
+      }
+    }
+    loadInsights()
+  }, [activeTab, id])
+
+  const pushActivityEntry = (description) => {
+    if (!description) return
+    const entry = {
+      description,
+      timestamp: new Date().toISOString(),
+      user: user?.name || 'Unknown',
+      user_id: user?._id || user?.id
+    }
+    setActivity((prev) => [entry, ...(prev || [])])
+  }
+
+  const refreshProjectActivity = async () => {
+    try {
+      const updated = await projectService.getById(id)
+      setProject(updated)
+      setGoals(updated.weeklyGoals || updated.weekly_goals || [])
+      setActivity(updated.activity || [])
+    } catch (error) {
+      console.error('Failed to refresh project activity:', error)
     }
   }
 
@@ -87,8 +120,17 @@ export default function ProjectDetail() {
       console.log('Creating task with data:', { ...formData, projectId: id })
       const newTask = await taskService.create({ ...formData, projectId: id })
       console.log('Task created:', newTask)
-      setTasks([...tasks, newTask])
-      await loadData() // Reload to get fresh data
+      setTasks((prev) => [...prev, newTask])
+      const detailBits = []
+      const assignees = formData.assignees || []
+      const collaborators = formData.collaborators || []
+      if (assignees.length > 0) detailBits.push(`assigned to ${assignees.length} user(s)`)
+      if (collaborators.length > 0) detailBits.push(`collaborators ${collaborators.length}`)
+      const detailSuffix = detailBits.length ? ` (${detailBits.join(', ')})` : ''
+      pushActivityEntry(`Task "${newTask.title || formData.title}" created by ${user?.name || 'Unknown'}${detailSuffix}`)
+      setTimeout(() => {
+        refreshProjectActivity()
+      }, 400)
     } catch (error) {
       console.error('Failed to create task:', error)
       throw error
@@ -117,12 +159,20 @@ export default function ProjectDetail() {
     }
 
     // Optimistic update
-    setTasks(tasks.map(task => 
+    setTasks((prev) => prev.map(task => 
       task._id === draggableId ? { ...task, status: newStatus } : task
     ))
+    if (draggedTask) {
+      const statusLabel = TASK_STATUS_LABELS[newStatus] || newStatus
+      pushActivityEntry(`Task "${draggedTask.title || 'Task'}" status changed to ${statusLabel} by ${user?.name || 'Unknown'}`)
+    }
 
     try {
-      await taskService.updateStatus(draggableId, newStatus)
+      const updatedTask = await taskService.updateStatus(draggableId, newStatus)
+      if (updatedTask) {
+        setTasks((prev) => prev.map(task => task._id === draggableId ? updatedTask : task))
+      }
+      refreshProjectActivity()
     } catch (error) {
       console.error('Failed to update task status:', error)
       loadData() // Revert on error
@@ -177,7 +227,7 @@ export default function ProjectDetail() {
 
   const handleUpdateProject = async (projectId, formData) => {
     try {
-      await projectService.update(projectId, {
+      const updatedProject = await projectService.update(projectId, {
         name: formData.name,
         description: formData.description,
         status: formData.status,
@@ -185,8 +235,13 @@ export default function ProjectDetail() {
         endDate: formData.endDate,
         accessUserIds: formData.accessUserIds || []
       })
-      // Reload to ensure we have fresh activity and derived fields
-      await loadData()
+      if (updatedProject) {
+        setProject(updatedProject)
+        setGoals(updatedProject.weeklyGoals || updatedProject.weekly_goals || [])
+        setActivity(updatedProject.activity || [])
+      } else {
+        pushActivityEntry(`Project updated by ${user?.name || 'Unknown'}`)
+      }
     } catch (error) {
       console.error('Failed to update project:', error)
       throw error
