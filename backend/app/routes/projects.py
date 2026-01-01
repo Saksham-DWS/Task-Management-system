@@ -15,6 +15,7 @@ from ..models import ProjectCreate, ProjectUpdate
 from ..services.auth import get_current_user, require_role
 from ..services.ai import generate_project_health
 from ..services.ai_scheduler import schedule_project_insight
+from ..services.notifications import dispatch_notification
 
 router = APIRouter(prefix="/api/projects", tags=["Projects"])
 
@@ -915,6 +916,21 @@ async def add_project_comment(
         {"_id": ObjectId(project_id)},
         {"$push": {"activity": activity}}
     )
+    owner_id = project.get("owner_id")
+    if owner_id:
+        preview = (content or "")[:120]
+        notify_message = f'{current_user.get("name", "Unknown")} commented on project "{project.get("name", "Project")}": "{preview}"'
+        email_subject = f'Project Comment: {project.get("name", "Project")}'
+        await dispatch_notification(
+            [owner_id],
+            "project_comments",
+            notify_message,
+            current_user,
+            project_id=project_id,
+            send_email=True,
+            email_subject=email_subject,
+            email_body=notify_message
+        )
     return comment_dict
 
 

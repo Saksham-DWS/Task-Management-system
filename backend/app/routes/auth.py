@@ -4,7 +4,7 @@ from datetime import datetime
 import re
 
 from ..database import get_users_collection
-from ..models import UserCreate, UserLogin, Token
+from ..models import UserCreate, UserLogin, Token, NotificationPreferences
 from ..services.auth import (
     get_password_hash, 
     verify_password, 
@@ -12,6 +12,7 @@ from ..services.auth import (
     get_current_user,
     require_role
 )
+from ..services.notifications import merge_preferences
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -45,6 +46,7 @@ async def register(
         "role": user_data.role.value,
         "status": "active",
         "access": {"category_ids": [], "project_ids": [], "task_ids": []},
+        "notification_preferences": NotificationPreferences().model_dump(),
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
     }
@@ -92,10 +94,12 @@ async def login_json(login_data: UserLogin):
 
 @router.get("/me")
 async def get_me(current_user: dict = Depends(get_current_user)):
+    preferences = merge_preferences(current_user.get("notification_preferences"))
     return {
         "_id": current_user["_id"],
         "name": current_user["name"],
         "email": current_user["email"],
         "role": current_user.get("role", "user"),
-        "access": current_user.get("access", {"category_ids": [], "project_ids": [], "task_ids": []})
+        "access": current_user.get("access", {"category_ids": [], "project_ids": [], "task_ids": []}),
+        "notification_preferences": preferences
     }

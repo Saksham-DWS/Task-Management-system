@@ -21,6 +21,16 @@ class AccessControl(BaseModel):
     task_ids: List[str] = []
 
 
+class NotificationPreferences(BaseModel):
+    in_app: bool = True
+    email: bool = True
+    task_assigned: bool = True
+    task_completed: bool = True
+    task_comments: bool = True
+    project_comments: bool = True
+    weekly_digest: bool = False
+
+
 class UserBase(BaseModel):
     name: str
     email: EmailStr
@@ -35,6 +45,7 @@ class UserUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[EmailStr] = None
     role: Optional[UserRole] = None
+    notification_preferences: Optional[NotificationPreferences] = None
 
 
 class UserInDB(UserBase):
@@ -42,6 +53,7 @@ class UserInDB(UserBase):
     role: UserRole = UserRole.USER
     status: UserStatus = UserStatus.ACTIVE
     access: AccessControl = AccessControl()
+    notification_preferences: NotificationPreferences = NotificationPreferences()
     created_at: datetime = datetime.utcnow()
     updated_at: datetime = datetime.utcnow()
 
@@ -54,6 +66,7 @@ class UserResponse(UserBase):
     role: UserRole
     status: UserStatus = UserStatus.ACTIVE
     access: AccessControl
+    notification_preferences: NotificationPreferences = NotificationPreferences()
 
     class Config:
         populate_by_name = True

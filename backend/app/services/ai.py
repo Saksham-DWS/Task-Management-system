@@ -596,6 +596,107 @@ async def _openai_chat(
     return None
 
 
+def _weekly_digest_fallback(context: Dict[str, Any]) -> Dict[str, Any]:
+    user = context.get("user", {})
+    stats = context.get("stats", {})
+    window = context.get("window", {})
+    tasks = context.get("tasks", [])
+
+    def _format_window(value: str | None) -> str:
+        if not value:
+            return ""
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return parsed.strftime("%d %b %Y")
+        except Exception:
+            return value
+
+    start_label = _format_window(window.get("start"))
+    end_label = _format_window(window.get("end"))
+    subject = f"Weekly Digest: {start_label} - {end_label}".strip(" -")
+
+    total = stats.get("tasks_total", 0)
+    completed = stats.get("tasks_completed", 0)
+    created = stats.get("tasks_created", 0)
+    updated = stats.get("tasks_updated", 0)
+    overdue = stats.get("tasks_overdue", 0)
+    task_comments = stats.get("task_comments", 0)
+    project_comments = stats.get("project_comments", 0)
+
+    if total == 0:
+        summary = "No task activity was recorded for the last week. Create or update tasks to see progress insights."
+    else:
+        summary = (
+            f"You have {total} active tasks. Last week you completed {completed}, created {created}, "
+            f"and updated {updated} task(s). {overdue} task(s) are overdue. "
+            f"You received {task_comments} task comment(s) and {project_comments} project comment(s)."
+        )
+
+    highlights = []
+    for task in tasks[:3]:
+        title = task.get("title") or "Task"
+        status = task.get("status") or "unknown"
+        priority = task.get("priority") or "normal"
+        highlights.append(f"{title} ({status}, {priority})")
+    if not highlights:
+        highlights.append("Keep tasks updated to surface weekly highlights.")
+
+    next_steps = []
+    if overdue > 0:
+        next_steps.append("Review overdue tasks and reset priorities or due dates.")
+    if completed == 0 and total > 0:
+        next_steps.append("Close at least one active task to build momentum.")
+    if task_comments > 0 or project_comments > 0:
+        next_steps.append("Respond to recent comments to keep collaboration moving.")
+    if not next_steps:
+        next_steps.append("Keep progress steady by updating key tasks and goals.")
+
+    return {
+        "subject": subject,
+        "summary": summary,
+        "highlights": highlights,
+        "next_steps": next_steps
+    }
+
+
+async def generate_weekly_digest(context: Dict[str, Any]) -> Dict[str, Any]:
+    fallback = _weekly_digest_fallback(context)
+    system_prompt = (
+        "You are an assistant writing weekly digest summaries for a project management app. "
+        "Return JSON only with keys: subject, summary, highlights, next_steps. "
+        "Highlights and next_steps should be arrays of short strings."
+    )
+    user_prompt = (
+        "Write a concise weekly digest for the user using the context below. "
+        "Summary should be 60-120 words, highlights 3-5 bullets, next_steps 2-4 bullets. "
+        "Use a professional, clear tone. "
+        f"\n\nContext:\n{json.dumps(context, ensure_ascii=True)}"
+    )
+
+    content, error = await _openai_chat(
+        [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+        max_tokens=400,
+        json_mode=True,
+        retries=2,
+        return_error=True
+    )
+    parsed = _safe_json_loads(content or "")
+    if not parsed:
+        return fallback
+
+    subject = (parsed.get("subject") or "").strip() or fallback["subject"]
+    summary = (parsed.get("summary") or "").strip() or fallback["summary"]
+    highlights = parsed.get("highlights") or fallback["highlights"]
+    next_steps = parsed.get("next_steps") or fallback["next_steps"]
+
+    return {
+        "subject": subject,
+        "summary": summary,
+        "highlights": highlights,
+        "next_steps": next_steps
+    }
+
+
 def _project_fallback_insights(
     project: Dict[str, Any],
     tasks: List[Dict[str, Any]],

@@ -8,12 +8,12 @@ from ..database import (
     get_projects_collection,
     get_users_collection,
     get_categories_collection,
-    get_comments_collection,
-    get_notifications_collection
+    get_comments_collection
 )
 from ..models import TaskCreate, TaskUpdate, CommentCreate, TaskStatus
 from ..services.auth import get_current_user
 from ..services.ai import analyze_task_risk
+from ..services.notifications import dispatch_notification
 
 router = APIRouter(prefix="/api/tasks", tags=["Tasks"])
 
@@ -120,30 +120,33 @@ def next_goal_id(goals: list) -> int:
         return len(goals) + 1
 
 
-async def notify_task_change(task: dict, actor: dict, message: str, event_type: str = "task_status", status: str = None, recipients: list = None):
-    notifications = get_notifications_collection()
-    if notifications is None:
-        return
-
+async def notify_task_change(
+    task: dict,
+    actor: dict,
+    message: str,
+    event_type: str = "task_status",
+    status: str = None,
+    recipients: list = None
+):
     target_ids = set([str(r) for r in (recipients or []) if r]) or unique_participants(task)
-    actor_id = str(actor.get("_id"))
-    documents = []
-    for uid in target_ids:
-        if uid == actor_id or not uid:
-            continue
-        documents.append({
-            "user_id": uid,
-            "message": message,
-            "task_id": str(task.get("_id", "")),
-            "project_id": task.get("project_id"),
-            "type": event_type,
-            "status": status,
-            "actor": {"id": actor_id, "name": actor.get("name")},
-            "read": False,
-            "created_at": datetime.utcnow()
-        })
-    if documents:
-        await notifications.insert_many(documents)
+    if not target_ids:
+        return
+    send_email = False
+    effective_event = event_type
+    if status == TaskStatus.COMPLETED.value:
+        effective_event = "task_completed"
+        send_email = True
+    await dispatch_notification(
+        target_ids,
+        effective_event,
+        message,
+        actor,
+        task_id=str(task.get("_id", "")),
+        project_id=task.get("project_id"),
+        status=status,
+        send_email=send_email,
+        send_in_app=True
+    )
 
 
 async def is_task_reviewer(task: dict, current_user: dict) -> bool:
@@ -489,6 +492,36 @@ async def create_task(
     
     result = await tasks.insert_one(task_dict)
     task_dict["_id"] = str(result.inserted_id)
+    if task_data.assignee_ids:
+        actor_name = current_user.get("name", "Unknown")
+        assignment_message = f'You have been assigned to task "{task_data.title}" by {actor_name}.'
+        due_label = dt_to_iso_z(task_data.due_date) if task_data.due_date else None
+        assigned_label = dt_to_iso_z(task_data.assigned_date) if task_data.assigned_date else None
+        project_name = project.get("name") if project else None
+        subject = f'Task Assigned: {task_data.title}'
+        email_lines = [
+            f"Task: {task_data.title}",
+            f"Assigned by: {actor_name}",
+        ]
+        if project_name:
+            email_lines.append(f"Project: {project_name}")
+        if assigned_label:
+            email_lines.append(f"Assigned date: {assigned_label}")
+        if due_label:
+            email_lines.append(f"Due date: {due_label}")
+        email_body = assignment_message + "\n\n" + "\n".join(email_lines)
+        await dispatch_notification(
+            task_data.assignee_ids,
+            "task_assigned",
+            assignment_message,
+            current_user,
+            task_id=str(task_dict.get("_id")),
+            project_id=task_data.project_id,
+            status=task_data.status.value,
+            send_email=True,
+            email_subject=subject,
+            email_body=email_body
+        )
     assignee_names = await fetch_user_names(task_data.assignee_ids or [])
     collaborator_names = await fetch_user_names(task_data.collaborator_ids or [])
     details = []
@@ -542,6 +575,7 @@ async def update_task(
     project_activity_entries = []
     update_data = {}
     task_title = incoming.get("title") or existing.get("title") or "Task"
+    added_assignees = []
 
     def add_activity(description):
         activity_entries.append(build_activity_entry(description, current_user))
@@ -676,6 +710,38 @@ async def update_task(
     if project_activity_entries:
         await push_project_activity(existing.get("project_id"), project_activity_entries)
     task = await tasks.find_one({"_id": ObjectId(task_id)})
+    if added_assignees:
+        project_name = None
+        try:
+            project = await get_projects_collection().find_one({"_id": ObjectId(existing.get("project_id"))})
+            if project:
+                project_name = project.get("name")
+        except Exception:
+            project_name = None
+        assignment_message = f'You have been assigned to task "{task_title}" by {actor_name}.'
+        subject = f'Task Assigned: {task_title}'
+        email_lines = [
+            f"Task: {task_title}",
+            f"Assigned by: {actor_name}"
+        ]
+        if project_name:
+            email_lines.append(f"Project: {project_name}")
+        due_label = dt_to_iso_z(task.get("due_date")) if task else None
+        if due_label:
+            email_lines.append(f"Due date: {due_label}")
+        email_body = assignment_message + "\n\n" + "\n".join(email_lines)
+        await dispatch_notification(
+            added_assignees,
+            "task_assigned",
+            assignment_message,
+            current_user,
+            task_id=str(task.get("_id")) if task else task_id,
+            project_id=existing.get("project_id"),
+            status=task.get("status") if task else existing.get("status"),
+            send_email=True,
+            email_subject=subject,
+            email_body=email_body
+        )
     if status_changed_to:
         await notify_task_change(
             task,
@@ -1106,6 +1172,25 @@ async def add_task_comment(
         {"$push": {"activity": activity}}
     )
     comment_dict["created_at"] = dt_to_iso_z(comment_dict.get("created_at"))
+    preview = (comment_data.content or "").strip()
+    if len(preview) > 120:
+        preview = preview[:117] + "..."
+    task_title = task.get("title", "Task")
+    notify_message = f'{current_user.get("name", "Unknown")} commented on task "{task_title}": "{preview}"'
+    email_subject = f'Task Comment: {task_title}'
+    email_body = notify_message
+    await dispatch_notification(
+        unique_participants(task),
+        "task_comments",
+        notify_message,
+        current_user,
+        task_id=task_id,
+        project_id=task.get("project_id"),
+        status=task.get("status"),
+        send_email=True,
+        email_subject=email_subject,
+        email_body=email_body
+    )
     return comment_dict
 
 

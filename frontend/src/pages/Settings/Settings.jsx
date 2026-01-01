@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { User, Bell, Shield, Palette, Save, Sun, Moon } from 'lucide-react'
 import { useAuthStore } from '../../store/auth.store'
 import { useUIStore } from '../../store/ui.store'
 import { getInitials, getAvatarColor } from '../../utils/helpers'
 import api from '../../services/api'
+import { notificationService } from '../../services/notification.service'
 
 export default function Settings() {
   const { user, updateUser } = useAuthStore()
@@ -11,6 +12,26 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState('profile')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState(null)
+
+  const defaultNotificationPrefs = {
+    in_app: true,
+    email: true,
+    task_assigned: true,
+    task_completed: true,
+    task_comments: true,
+    project_comments: true,
+    weekly_digest: false
+  }
+
+  const normalizePreferences = (prefs = {}) => ({
+    in_app: prefs.in_app ?? defaultNotificationPrefs.in_app,
+    email: prefs.email ?? defaultNotificationPrefs.email,
+    task_assigned: prefs.task_assigned ?? defaultNotificationPrefs.task_assigned,
+    task_completed: prefs.task_completed ?? defaultNotificationPrefs.task_completed,
+    task_comments: prefs.task_comments ?? defaultNotificationPrefs.task_comments,
+    project_comments: prefs.project_comments ?? defaultNotificationPrefs.project_comments,
+    weekly_digest: prefs.weekly_digest ?? defaultNotificationPrefs.weekly_digest
+  })
 
   const [profile, setProfile] = useState({
     name: user?.name || '',
@@ -20,13 +41,25 @@ export default function Settings() {
     confirmPassword: ''
   })
 
-  const [notifications, setNotifications] = useState({
-    emailNotifications: true,
-    taskAssigned: true,
-    taskCompleted: true,
-    comments: true,
-    weeklyDigest: false
-  })
+  const [notifications, setNotifications] = useState(
+    normalizePreferences(user?.notification_preferences)
+  )
+
+  useEffect(() => {
+    const loadPreferences = async () => {
+      try {
+        const data = await notificationService.getPreferences()
+        const normalized = normalizePreferences(data)
+        setNotifications(normalized)
+        updateUser({ notification_preferences: normalized })
+      } catch (error) {
+        if (user?.notification_preferences) {
+          setNotifications(normalizePreferences(user.notification_preferences))
+        }
+      }
+    }
+    loadPreferences()
+  }, [user?._id])
 
   const handleSaveProfile = async (e) => {
     e.preventDefault()
@@ -86,10 +119,13 @@ export default function Settings() {
     setMessage(null)
     
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      const response = await notificationService.savePreferences(notifications)
+      const normalized = normalizePreferences(response)
+      setNotifications(normalized)
+      updateUser({ notification_preferences: normalized })
       setMessage({ type: 'success', text: 'Notification preferences saved' })
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to save preferences' })
+      setMessage({ type: 'error', text: error.response?.data?.detail || 'Failed to save preferences' })
     } finally {
       setSaving(false)
     }
@@ -195,11 +231,13 @@ export default function Settings() {
               
               <div className="space-y-4">
                 {[
-                  { key: 'emailNotifications', label: 'Email Notifications', desc: 'Receive notifications via email' },
-                  { key: 'taskAssigned', label: 'Task Assigned', desc: 'When a task is assigned to you' },
-                  { key: 'taskCompleted', label: 'Task Completed', desc: 'When a task you\'re involved in is completed' },
-                  { key: 'comments', label: 'Comments', desc: 'When someone comments on your tasks' },
-                  { key: 'weeklyDigest', label: 'Weekly Digest', desc: 'Receive a weekly summary of your work' }
+                  { key: 'in_app', label: 'In-App Notifications', desc: 'Show notifications inside the app' },
+                  { key: 'email', label: 'Email Notifications', desc: 'Receive notifications via email' },
+                  { key: 'task_assigned', label: 'Task Assigned', desc: 'When a task is assigned to you' },
+                  { key: 'task_completed', label: 'Task Completed', desc: 'When a task you\'re involved in is completed' },
+                  { key: 'task_comments', label: 'Task Comments', desc: 'When someone comments on your tasks' },
+                  { key: 'project_comments', label: 'Project Comments', desc: 'When someone comments on your projects' },
+                  { key: 'weekly_digest', label: 'Weekly Digest', desc: 'Receive a weekly summary of your work' }
                 ].map(item => (
                   <label key={item.key} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg cursor-pointer">
                     <div>

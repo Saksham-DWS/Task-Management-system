@@ -13,6 +13,7 @@ from ..database import (
     get_comments_collection
 )
 from .ai import generate_project_ai_insights, generate_admin_ai_insights, _word_count, _to_iso_z
+from .notifications import build_weekly_digest, dispatch_notification, merge_preferences
 
 _BOOTSTRAPPED = False
 
@@ -21,6 +22,20 @@ def _next_due_at(base_time: datetime, interval_hours: int) -> datetime:
     jitter_minutes = max(0, int(settings.ai_insights_jitter_minutes))
     jitter = timedelta(minutes=random.randint(0, jitter_minutes)) if jitter_minutes else timedelta()
     return base_time + timedelta(hours=interval_hours) + jitter
+
+
+def _parse_dt(value):
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=None)
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return parsed.replace(tzinfo=None)
+        except Exception:
+            return None
+    return None
 
 
 async def ensure_project_schedules():
@@ -300,6 +315,7 @@ async def run_ai_scheduler():
             await schedule_admin_insight()
             await _process_due_projects()
             await _process_due_admin()
+            await _process_due_weekly_digests()
         except Exception:
             pass
         await asyncio.sleep(settings.ai_scheduler_poll_seconds)
@@ -328,3 +344,37 @@ async def _process_due_admin():
     next_due = doc.get("next_due_at")
     if next_due and next_due <= now:
         await generate_admin_insight(triggered_by="system")
+
+
+async def _process_due_weekly_digests():
+    if not settings.weekly_digest_enabled:
+        return
+    users = get_users_collection()
+    now = datetime.utcnow()
+    interval = timedelta(hours=max(1, int(settings.weekly_digest_interval_hours)))
+    async for user in users.find({"status": {"$ne": "inactive"}}):
+        prefs = merge_preferences(user.get("notification_preferences"))
+        if not prefs.get("weekly_digest"):
+            continue
+        last_sent = _parse_dt((user.get("notification_meta") or {}).get("weekly_digest_last_sent"))
+        if last_sent and last_sent + interval > now:
+            continue
+        digest = await build_weekly_digest(user, now - interval, now)
+        if not digest:
+            continue
+        subject = digest.get("subject") or "Weekly Digest"
+        email_body = digest.get("email_body") or digest.get("summary") or ""
+        message = digest.get("in_app_message") or "Your weekly digest is ready."
+        await dispatch_notification(
+            [str(user.get("_id"))],
+            "weekly_digest",
+            message,
+            {"_id": "system", "name": "System"},
+            send_email=True,
+            email_subject=subject,
+            email_body=email_body
+        )
+        await users.update_one(
+            {"_id": user.get("_id")},
+            {"$set": {"notification_meta.weekly_digest_last_sent": now}}
+        )

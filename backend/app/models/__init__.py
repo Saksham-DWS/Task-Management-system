@@ -1,5 +1,5 @@
 from .user import (
-    UserRole, AccessControl, UserBase, UserCreate, UserUpdate,
+    UserRole, AccessControl, NotificationPreferences, UserBase, UserCreate, UserUpdate,
     UserInDB, UserResponse, UserLogin, Token, TokenData
 )
 from .category import (

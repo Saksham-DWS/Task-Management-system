@@ -4,7 +4,7 @@ from datetime import datetime
 import re
 
 from ..database import get_users_collection
-from ..models import UserCreate, UserUpdate
+from ..models import UserCreate, UserUpdate, NotificationPreferences
 from ..services.auth import get_current_user, require_role, get_password_hash
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
@@ -53,6 +53,7 @@ async def create_user(
         "role": user_data.role.value,
         "status": "active",
         "access": {"category_ids": [], "project_ids": [], "task_ids": []},
+        "notification_preferences": NotificationPreferences().model_dump(),
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
     }

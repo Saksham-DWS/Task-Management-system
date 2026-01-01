@@ -4,6 +4,7 @@ import { getInitials, getAvatarColor } from '../../utils/helpers'
 import { USER_ROLES } from '../../utils/constants'
 import { useAuthStore } from '../../store/auth.store'
 import api from '../../services/api'
+import { notificationService } from '../../services/notification.service'
 
 const normalizeRole = (role) => (role === USER_ROLES.MANAGER ? USER_ROLES.ADMIN : role)
 
@@ -27,12 +28,34 @@ export default function TeamsAccess() {
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: USER_ROLES.USER })
   const [editUser, setEditUser] = useState({ name: '', email: '', role: USER_ROLES.USER, password: '' })
   const [editRoleOriginal, setEditRoleOriginal] = useState(USER_ROLES.USER)
+  const [notificationPrefs, setNotificationPrefs] = useState(null)
+  const [savingPrefs, setSavingPrefs] = useState(false)
 
   const isAdmin = currentUser?.role === USER_ROLES.ADMIN
 
   useEffect(() => {
     loadData()
   }, [])
+
+  const defaultNotificationPrefs = {
+    in_app: true,
+    email: true,
+    task_assigned: true,
+    task_completed: true,
+    task_comments: true,
+    project_comments: true,
+    weekly_digest: false
+  }
+
+  const normalizePrefs = (prefs = {}) => ({
+    in_app: prefs.in_app ?? defaultNotificationPrefs.in_app,
+    email: prefs.email ?? defaultNotificationPrefs.email,
+    task_assigned: prefs.task_assigned ?? defaultNotificationPrefs.task_assigned,
+    task_completed: prefs.task_completed ?? defaultNotificationPrefs.task_completed,
+    task_comments: prefs.task_comments ?? defaultNotificationPrefs.task_comments,
+    project_comments: prefs.project_comments ?? defaultNotificationPrefs.project_comments,
+    weekly_digest: prefs.weekly_digest ?? defaultNotificationPrefs.weekly_digest
+  })
 
   const loadData = async () => {
     setLoading(true)
@@ -74,6 +97,30 @@ export default function TeamsAccess() {
     })
     setEditRoleOriginal(normalizedRole)
     setShowEditUser(true)
+  }
+
+  useEffect(() => {
+    if (selectedUser) {
+      setNotificationPrefs(normalizePrefs(selectedUser.notification_preferences))
+    } else {
+      setNotificationPrefs(null)
+    }
+  }, [selectedUser?._id])
+
+  const handleSaveNotificationPrefs = async () => {
+    if (!selectedUser || !notificationPrefs) return
+    setSavingPrefs(true)
+    try {
+      const response = await notificationService.updateUserPreferences(selectedUser._id, notificationPrefs)
+      const updatedUser = { ...selectedUser, notification_preferences: response }
+      setUsers(users.map((user) => (user._id === selectedUser._id ? updatedUser : user)))
+      setSelectedUser(updatedUser)
+    } catch (error) {
+      console.error('Failed to update notification preferences:', error)
+      alert(error.response?.data?.detail || 'Failed to update notification preferences')
+    } finally {
+      setSavingPrefs(false)
+    }
   }
 
   const handleEditUser = async (e) => {
@@ -411,6 +458,47 @@ export default function TeamsAccess() {
                   <p className="text-gray-500 dark:text-gray-400 text-center py-4">No categories available</p>
                 )}
               </div>
+
+              {notificationPrefs && (
+                <div className="mt-8">
+                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Notification Controls</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    Define which notification triggers and channels this user receives.
+                  </p>
+                  <div className="space-y-3">
+                    {[
+                      { key: 'in_app', label: 'In-App Notifications', desc: 'Show notifications inside the app' },
+                      { key: 'email', label: 'Email Notifications', desc: 'Receive notifications via email' },
+                      { key: 'task_assigned', label: 'Task Assigned', desc: 'When a task is assigned to this user' },
+                      { key: 'task_completed', label: 'Task Completed', desc: 'When tasks they are involved in are completed' },
+                      { key: 'task_comments', label: 'Task Comments', desc: 'When someone comments on their tasks' },
+                      { key: 'project_comments', label: 'Project Comments', desc: 'When someone comments on their projects' },
+                      { key: 'weekly_digest', label: 'Weekly Digest', desc: 'Receive the weekly summary email' }
+                    ].map((item) => (
+                      <label
+                        key={item.key}
+                        className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg cursor-pointer"
+                      >
+                        <div>
+                          <p className="font-medium text-gray-900 dark:text-white">{item.label}</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">{item.desc}</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={notificationPrefs[item.key]}
+                          onChange={(e) => setNotificationPrefs({ ...notificationPrefs, [item.key]: e.target.checked })}
+                          className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 w-5 h-5"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <div className="pt-4">
+                    <button onClick={handleSaveNotificationPrefs} disabled={savingPrefs} className="btn-primary">
+                      {savingPrefs ? 'Saving...' : 'Save Notification Settings'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="card flex items-center justify-center h-64">

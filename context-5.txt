@@ -1,0 +1,104 @@
+**New Goal Context a feature addtion in the system which will be work and in sync with best Tailwind React UI frontend with backend and Backend Database syncing***
+
+
+1. Hey I want to add new feature in my application via using a nodemailer and a Email & internal notification
+system where my backend frontend UI and Database should be in full sync
+
+I want that my system generates Internal notifications to the user on there notification panels as well as 
+email notifications to their registered email id's.
+
+1st the Internal notification , notification panel
+
+when notification comes the red dot shows on the bell icon 
+and when user click on the bell icon ,
+a notification page opens a internal notification page where user can see all notifications
+an can mark those notifications , Raed, Unread, or also can delete.
+
+something like  : 
+
+ALL          Marked Read       Marked unread 
+
+
+when notification comes it shows in all
+
+"A Task has been assinged to you by user x , x date & time,   tick to mark read cross to mark unread and a delete button infront of the notification.
+
+if user tick and mark read that notification went to mark read panel ,
+and if user click on 'Marked read'.
+a new component opens and he can see all notification Under marked read panel of that category 
+
+similarly for unread if user click x cross in all notification in front of a notification that notification went to unread panel.
+
+
+2nd for email notifications 
+
+In same actions email notifications and internal notifications will be generated to the respected user 
+on basis of the scinario triggers
+
+we will use email notification via nodemailer i will put .env vars for nodemailer like smpt address, or what ever required in the backend 
+.env , so one thing also write example variables in .env file of backend who are required for these tasks to happen
+
+2.1. Scinarios notification will be went to the respected users or multiple users
+
+Gnerate notification when  : 
+1.User Got the task or task assinged by some user to x user's {Both Email and Internal notification with the relevent details in the notification and email}
+2.notification generated when a Task You are involved in completed or completed by you other connected user's will get the email and internal notification
+3.Generates Email and internal notification when someone comments on your tasks.
+4.Generates email and internal notification when someone comments on you project comments if you are project owner
+5.A weekly Digest  : where you will get weekly email of summary of last week work. [ Via AI powered weekly digest sync between Backend and AI pipeline]
+
+
+
+***3
+
+Also the Optation of the what email / internal notification you should be receiving 
+in teams and access your admin can define what sort of emails /internal notification you will be getting based on the trigger 
+on you account level from you Admin 
+
+The notification optoutaion feature has to be working.,
+
+
+
+Understand My intent ,vision and thinking , what type of notification system i am wanting 
+with full sync of the user actions like categories access giving, project access giving, categories creation, project creation,
+task creation, task completion etc ,
+with error free code and with best code quality and in sync with Best Tailwind React Frontend UI & Backend with AI power and Database sync.
+
+Take step wise approach with logical, Practical, Adaptive approach
+
+
+
+*******AI recommendations for notifications *********:
+
+
+
+Short answer: with SMTP configured and SMTP_ENABLED=true, users will get both in‑app and email notifications for the events we wired, as long as their notification preferences allow it.
+
+What is currently covered:
+
+Task assigned (on create or when assignees are added)
+Task completed (status moved to completed; notifies all participants except the actor)
+Task comments (notifies task participants except the actor)
+Project comments (notifies the project owner, except the actor)
+Weekly digest (only if the user’s weekly_digest preference is enabled)
+Important behavior notes:
+
+In‑app notifications are stored in DB and shown in the bell + /notifications page.
+There is no real‑time push; the header polls every 60s and the notifications page loads on visit.
+If a user disables in_app or email in preferences, that channel won’t send.
+Not yet wired (if you want them):
+
+Category/project access changes, category/project creation, etc. These aren’t emitting notifications right now.
+If you want, I can:
+
+Add missing triggers (access changes, category/project creation, etc.).
+Add real‑time updates via WebSocket or SSE.
+Add admin‑side audit logs + notification templates.
+
+
+
+************* Performance Optimization **************
+
+Hey You have full code base access , 
+
+I want to increase the in app actions syncablility , for example when a user creates a task it took 3-4 sec to load and show yes the task has been assigned , or if admin move the task from Not started to in-progress or any other forward stage , the application took moment to show the action syncing , for example this happend the moment , i drag from Not selected to inprogress , and at 1 sec spam i click on activity log of project level no log has been shown to that of a action and whn i refresh the browser manually then i see the logg of that action , which very unaccptable, it should load the moment i done any action , in the moment application should take 1 sec but it should show the actions logging or actions effect i the minutes of seconds like in 1.1s second i want the my application all actions syncablility to be fast so when my application is used by people at in scale like for example if 1000+ employees or a company user who are 1000+ and are using the application at the same time , my application should have to be fast enough that they did'nt think what project they bought it is disguting very slow, so thats why i want my application very actions reaction should takes place in 1's of second like in flintch , kindly do the need optimizations in my full code base so that , when i do any action for example  :  i moved a project as a project owner or admin from 'Not Started' stage to 'On Hold' or any stage forward the moment i done the action , and the moment i check actvity log i should see the action logging , and at the same time the user got the task a see the status has been changed also also see internal notfication for this stage moving action via admin/project owner at the moment , like this example in full application i want full syncing works in 1-2 seconds best performance and syncing optimization I want

@@ -14,6 +14,7 @@ import TeamsAccess from '../pages/TeamsAccess/TeamsAccess'
 import Insights from '../pages/Insights/Insights'
 import Reports from '../pages/Reports/Reports'
 import Settings from '../pages/Settings/Settings'
+import Notifications from '../pages/Notifications/Notifications'
 
 export default function AppRoutes() {
   return (
@@ -31,6 +32,7 @@ export default function AppRoutes() {
       <Route path="/teams" element={<ProtectedRoute><TeamsAccess /></ProtectedRoute>} />
       <Route path="/insights" element={<ProtectedRoute><Insights /></ProtectedRoute>} />
       <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+      <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
       
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -44,6 +44,18 @@ class Settings(BaseSettings):
     ai_project_task_limit: int = 40
     ai_insights_jitter_minutes: int = 360
     ai_scheduler_enabled: bool = True
+    weekly_digest_interval_hours: int = 168
+    weekly_digest_enabled: bool = True
+
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+    smtp_from_name: str = "DWS Project Manager"
+    smtp_use_tls: bool = True
+    smtp_use_ssl: bool = False
+    smtp_enabled: bool = False
 
     # Aliases for JWT settings
     @property
