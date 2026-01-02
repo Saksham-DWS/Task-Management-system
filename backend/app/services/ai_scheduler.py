@@ -113,7 +113,11 @@ async def schedule_admin_insight():
     )
 
 
-async def generate_project_insight(project_id: str, triggered_by: str = "system") -> dict | None:
+async def generate_project_insight(
+    project_id: str,
+    triggered_by: str = "system",
+    force_refresh: bool = False
+) -> dict | None:
     projects = get_projects_collection()
     tasks = get_tasks_collection()
     comments = get_comments_collection()
@@ -166,7 +170,12 @@ async def generate_project_insight(project_id: str, triggered_by: str = "system"
     )
     now = datetime.utcnow()
     next_due = _next_due_at(now, settings.ai_project_interval_hours)
-    if result.get("source") == "fallback" and existing and existing.get("source") in ["ai", "ai_cached"]:
+    if (
+        result.get("source") == "fallback"
+        and existing
+        and existing.get("source") in ["ai", "ai_cached"]
+        and not force_refresh
+    ):
         payload = {
             "scope": "project",
             "project_id": project_id,
@@ -214,7 +223,7 @@ async def generate_project_insight(project_id: str, triggered_by: str = "system"
     return payload
 
 
-async def generate_admin_insight(triggered_by: str = "system") -> dict:
+async def generate_admin_insight(triggered_by: str = "system", force_refresh: bool = False) -> dict:
     categories = get_categories_collection()
     projects = get_projects_collection()
     tasks = get_tasks_collection()
@@ -241,7 +250,12 @@ async def generate_admin_insight(triggered_by: str = "system") -> dict:
     now = datetime.utcnow()
     next_due = _next_due_at(now, settings.ai_admin_interval_hours)
     existing = await insights.find_one({"scope": "admin"})
-    if result.get("source") == "fallback" and existing and existing.get("source") in ["ai", "ai_cached"]:
+    if (
+        result.get("source") == "fallback"
+        and existing
+        and existing.get("source") in ["ai", "ai_cached"]
+        and not force_refresh
+    ):
         payload = {
             "scope": "admin",
             "analysis": existing.get("analysis"),

@@ -2,6 +2,7 @@ from typing import List, Dict, Any
 from datetime import datetime, timedelta, timezone
 import asyncio
 import json
+import re
 
 # Try to import OpenAI, but make it optional
 try:
@@ -549,6 +550,107 @@ def _safe_json_loads(content: str) -> Dict[str, Any] | None:
         return None
 
 
+def _parse_json_fragment(content: str) -> Any | None:
+    if not content:
+        return None
+    text = content.strip()
+    for start_char, end_char in [("[", "]"), ("{", "}")]:
+        start = text.find(start_char)
+        end = text.rfind(end_char)
+        if start == -1 or end == -1 or end <= start:
+            continue
+        try:
+            return json.loads(text[start:end + 1])
+        except Exception:
+            continue
+    return None
+
+
+def _coerce_list(value: Any, key_hint: str | None = None) -> List[Any]:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, dict) and key_hint:
+        candidate = value.get(key_hint)
+        if isinstance(candidate, list):
+            return candidate
+    if isinstance(value, str):
+        parsed = _parse_json_fragment(value)
+        if isinstance(parsed, list):
+            return parsed
+        if isinstance(parsed, dict) and key_hint:
+            candidate = parsed.get(key_hint)
+            if isinstance(candidate, list):
+                return candidate
+    return []
+
+
+def _clean_ai_text(text: str | None) -> str:
+    if not text:
+        return ""
+    cleaned = str(text)
+    patterns = [
+        r"(Category Summaries|Project Summaries|Task Insights|Citations)\s*:?\s*\[.*?\]",
+        r"(category_summaries|project_summaries|task_insights|citations)\s*:?\s*\[.*?\]",
+        r"\[\s*\{[^]]*?\"(?:category_id|project_id|task_id)\"[^]]*?\}\s*\]"
+    ]
+    for pattern in patterns:
+        cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE | re.DOTALL)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+    return cleaned
+
+
+def _normalize_summary_items(items: List[Any], id_key: str) -> List[Dict[str, Any]]:
+    normalized = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        name = _clean_ai_text(item.get("name") or "")
+        insight = _clean_ai_text(item.get("insight") or "")
+        entry = dict(item)
+        if name:
+            entry["name"] = name
+        if insight:
+            entry["insight"] = insight
+        if id_key in entry and entry[id_key] is not None:
+            entry[id_key] = str(entry[id_key])
+        elif entry.get("id"):
+            entry[id_key] = str(entry.get("id"))
+        normalized.append(entry)
+    return normalized
+
+
+def _normalize_citations(items: List[Any], fallback: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    cleaned = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        label = item.get("label")
+        value = item.get("value")
+        if label is None or value is None:
+            continue
+        cleaned.append({"label": str(label), "value": value})
+    return cleaned or fallback
+
+
+def _normalize_task_insights(items: List[Any], fallback: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    cleaned = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        task_id = item.get("task_id") or item.get("id")
+        entry = {
+            "task_title": _clean_ai_text(item.get("task_title") or item.get("title") or ""),
+            "status": item.get("status"),
+            "health": item.get("health"),
+            "insight": _clean_ai_text(item.get("insight") or ""),
+            "recommendation": _clean_ai_text(item.get("recommendation") or "")
+        }
+        if task_id is not None:
+            entry["task_id"] = str(task_id)
+        cleaned.append(entry)
+    return cleaned or fallback
+
+
 async def _openai_chat(
     messages: List[Dict[str, str]],
     max_tokens: int,
@@ -925,7 +1027,8 @@ async def generate_project_ai_insights(
             "Use only the provided data and keep wording practical. "
             "If comments are provided, reference themes or blockers briefly. "
             "Bold the project name and task titles using **double asterisks** inside the summary and recommendation. "
-            "Do not include markdown outside of bold markers."
+            "Do not include markdown outside of bold markers. "
+            "Do not include JSON snippets, arrays, or schema labels inside the text fields."
             f"\n\nContext:\n{json.dumps(context, ensure_ascii=True)}"
         )
 
@@ -997,6 +1100,12 @@ async def generate_project_ai_insights(
             task_id = fallback_task.get("task_id")
             merged.append(ai_by_id.get(task_id, fallback_task))
         task_insights = merged
+
+    summary = _clean_ai_text(summary)
+    recommendation = _clean_ai_text(recommendation)
+    goals_summary = _clean_ai_text(goals_summary)
+    citations = _normalize_citations(_coerce_list(citations), fallback["citations"])
+    task_insights = _normalize_task_insights(_coerce_list(task_insights), fallback_task_insights)
 
     summary_sections, recommendation_sections, goals_sections = _project_expansion_sections(
         project,
@@ -1166,7 +1275,8 @@ async def generate_admin_ai_insights(categories: List[Dict[str, Any]], projects:
             "Generate admin insights for categories, projects, tasks, and users. "
             f"Return JSON with keys: {schema} "
             "Bold category and project names using **double asterisks** inside analysis and recommendations. "
-            "Use only the provided data."
+            "Use only the provided data. "
+            "Do not include JSON snippets, arrays, or schema labels inside the text fields."
             f"\n\nContext:\n{json.dumps(context, ensure_ascii=True)}"
         )
 
@@ -1219,6 +1329,20 @@ async def generate_admin_ai_insights(categories: List[Dict[str, Any]], projects:
     quick_win = (parsed.get("quick_win") or "").strip() or fallback["quick_win"]
     category_summaries = parsed.get("category_summaries") or fallback["category_summaries"]
     project_summaries = parsed.get("project_summaries") or fallback["project_summaries"]
+
+    analysis = _clean_ai_text(analysis)
+    recommendations = _clean_ai_text(recommendations)
+    focus_area = _clean_ai_text(focus_area)
+    team_balance = _clean_ai_text(team_balance)
+    quick_win = _clean_ai_text(quick_win)
+    category_summaries = _normalize_summary_items(
+        _coerce_list(category_summaries, "category_summaries") or fallback["category_summaries"],
+        "category_id"
+    ) or fallback["category_summaries"]
+    project_summaries = _normalize_summary_items(
+        _coerce_list(project_summaries, "project_summaries") or fallback["project_summaries"],
+        "project_id"
+    ) or fallback["project_summaries"]
 
     analysis_sections, recommendation_sections = _admin_expansion_sections(categories, projects, tasks, users)
     analysis = _ensure_min_words(analysis, 400, analysis_sections)

@@ -4,8 +4,12 @@ import { categoryService } from '../../services/category.service'
 import { projectService } from '../../services/project.service'
 import { taskService } from '../../services/task.service'
 import { formatDate } from '../../utils/helpers'
+import { useAccess } from '../../hooks/useAccess'
+import { useAuthStore } from '../../store/auth.store'
 
 export default function Reports() {
+  const { isManager } = useAccess()
+  const { user } = useAuthStore()
   const [loading, setLoading] = useState(true)
   const [dateRange, setDateRange] = useState('all')
   const [selectedCategory, setSelectedCategory] = useState('')
@@ -23,14 +27,56 @@ export default function Reports() {
     loadData()
   }, [])
 
+  const isGlobalReports = isManager()
+  const currentUserId = user?._id || user?.id
+
+  const filterTasksForUser = (tasks) => {
+    if (!currentUserId) return []
+    const normalizedUserId = String(currentUserId)
+    return tasks.filter((task) => {
+      const assigneeIds = (task.assignees || []).map((assignee) => String(assignee._id || assignee.id))
+      const collaboratorIds = (task.collaborators || []).map((collaborator) => String(collaborator._id || collaborator.id))
+      return assigneeIds.includes(normalizedUserId) || collaboratorIds.includes(normalizedUserId)
+    })
+  }
+
   const loadData = async () => {
     setLoading(true)
     try {
-      const [categories, projects, tasks] = await Promise.all([
-        categoryService.getAll(),
-        projectService.getAll(),
-        taskService.getAll()
-      ])
+      let categories = []
+      let projects = []
+      let tasks = []
+      if (isGlobalReports) {
+        const [categoriesData, projectsData, tasksData] = await Promise.all([
+          categoryService.getAll(),
+          projectService.getAll(),
+          taskService.getAll()
+        ])
+        categories = categoriesData
+        projects = projectsData
+        tasks = tasksData
+      } else {
+        const tasksData = await taskService.getMyTasks()
+        const scopedTasks = filterTasksForUser(tasksData)
+        if (scopedTasks.length > 0) {
+          const [categoriesData, projectsData] = await Promise.all([
+            categoryService.getAll(),
+            projectService.getAll()
+          ])
+          const projectIds = new Set(scopedTasks.map((task) => task.project_id || task.projectId).filter(Boolean))
+          const categoryIds = new Set(scopedTasks.map((task) => task.category_id || task.categoryId).filter(Boolean))
+
+          projects = projectsData.filter((project) => projectIds.has(project._id))
+          projects.forEach((project) => {
+            const categoryId = project.category_id || project.categoryId
+            if (categoryId) {
+              categoryIds.add(categoryId)
+            }
+          })
+          categories = categoriesData.filter((category) => categoryIds.has(category._id))
+        }
+        tasks = scopedTasks
+      }
 
       const completedTasks = tasks.filter(t => t.status === 'completed')
       
@@ -83,8 +129,30 @@ export default function Reports() {
 
   const getTasksByUser = () => {
     const userTasks = {}
+    const normalizedUserId = currentUserId ? String(currentUserId) : null
     filteredTasks.forEach(task => {
-      task.assignees?.forEach(assignee => {
+      const assignees = task.assignees || []
+      const collaborators = task.collaborators || []
+      if (!isGlobalReports && normalizedUserId) {
+        const match = assignees.find((assignee) => String(assignee._id || assignee.id) === normalizedUserId)
+          || collaborators.find((collaborator) => String(collaborator._id || collaborator.id) === normalizedUserId)
+        if (!match) {
+          return
+        }
+        const name = match.name || user?.name || 'Me'
+        if (!userTasks[name]) {
+          userTasks[name] = { total: 0, completed: 0 }
+        }
+        userTasks[name].total++
+        if (task.status === 'completed') {
+          userTasks[name].completed++
+        }
+        return
+      }
+      assignees.forEach(assignee => {
+        if (!assignee?.name) {
+          return
+        }
         if (!userTasks[assignee.name]) {
           userTasks[assignee.name] = { total: 0, completed: 0 }
         }

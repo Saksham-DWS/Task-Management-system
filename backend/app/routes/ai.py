@@ -244,7 +244,11 @@ async def generate_project_ai(
         from fastapi import HTTPException
         raise HTTPException(status_code=403, detail="Not authorized to generate insights for this project")
 
-    payload = await generate_project_insight(project_id, triggered_by=str(current_user.get("_id")))
+    payload = await generate_project_insight(
+        project_id,
+        triggered_by=str(current_user.get("_id")),
+        force_refresh=True
+    )
     return {"insight": serialize_insight(payload)}
 
 
@@ -261,5 +265,8 @@ async def get_admin_insights(
 async def generate_admin_ai(
     current_user: dict = Depends(require_role(["admin", "manager"]))
 ):
-    payload = await generate_admin_insight(triggered_by=str(current_user.get("_id")))
+    payload = await generate_admin_insight(
+        triggered_by=str(current_user.get("_id")),
+        force_refresh=True
+    )
     return {"insight": serialize_insight(payload)}

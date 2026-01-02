@@ -372,7 +372,18 @@ async def populate_task(task: dict) -> dict:
 @router.get("")
 async def get_tasks(current_user: dict = Depends(get_current_user)):
     tasks = get_tasks_collection()
-    cursor = tasks.find({})
+    role = current_user.get("role", "user")
+    if role in ["admin", "manager"]:
+        cursor = tasks.find({})
+    else:
+        user_id = current_user["_id"]
+        cursor = tasks.find({
+            "$or": [
+                {"assignee_ids": user_id},
+                {"collaborator_ids": user_id},
+                {"assigned_by_id": user_id}
+            ]
+        })
     
     result = []
     async for task in cursor:
