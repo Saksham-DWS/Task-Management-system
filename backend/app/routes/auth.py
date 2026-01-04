@@ -45,7 +45,7 @@ async def register(
         "password": get_password_hash(user_data.password),
         "role": user_data.role.value,
         "status": "active",
-        "access": {"category_ids": [], "project_ids": [], "task_ids": []},
+        "access": {"group_ids": [], "project_ids": [], "task_ids": []},
         "notification_preferences": NotificationPreferences().model_dump(),
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
@@ -100,6 +100,6 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         "name": current_user["name"],
         "email": current_user["email"],
         "role": current_user.get("role", "user"),
-        "access": current_user.get("access", {"category_ids": [], "project_ids": [], "task_ids": []}),
+        "access": current_user.get("access", {"group_ids": [], "project_ids": [], "task_ids": []}),
         "notification_preferences": preferences
     }

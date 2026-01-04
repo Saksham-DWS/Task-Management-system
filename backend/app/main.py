@@ -8,7 +8,7 @@ from .services.ai_scheduler import run_ai_scheduler
 from .routes import (
     auth_router,
     users_router,
-    categories_router,
+    groups_router,
     projects_router,
     tasks_router,
     notifications_router,
@@ -48,7 +48,7 @@ app.add_middleware(
 # Include routers
 app.include_router(auth_router)
 app.include_router(users_router)
-app.include_router(categories_router)
+app.include_router(groups_router)
 app.include_router(projects_router)
 app.include_router(tasks_router)
 app.include_router(notifications_router)

@@ -30,7 +30,7 @@ export default function TaskDetail() {
   const navigate = useNavigate()
   const { user } = useAuthStore()
   const { activeModal, openModal, closeModal } = useUIStore()
-  const { canDeleteTask, canEditTask, canViewCategory, canViewProject, isAdmin } = useAccess()
+  const { canDeleteTask, canEditTask, canViewGroup, canViewProject, isAdmin } = useAccess()
   const fileInputRef = useRef(null)
 
   const [task, setTask] = useState(null)
@@ -246,10 +246,10 @@ export default function TaskDetail() {
     )
   }
 
-  const categoryId = task.category_id || task.categoryId
+  const groupId = task.group_id || task.groupId
   const projectId = task.project_id || task.projectId
-  const canSeeCategory = canViewCategory(categoryId)
-  const canSeeProject = canViewProject(projectId, categoryId)
+  const canSeeGroup = canViewGroup(groupId)
+  const canSeeProject = canViewProject(projectId, groupId)
   const normalizedStatus = normalizeTaskStatus(task.status)
   const isReviewer = user?.role === 'admin' || user?.role === 'manager' || task.assigned_by?._id === user?._id || task.assigned_by_id === user?._id
   const isAwaitingReview = normalizedStatus === TASK_STATUS.REVIEW
@@ -385,12 +385,12 @@ export default function TaskDetail() {
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1">
-            {canSeeCategory ? (
-              <Link to={`/categories/${categoryId}`} className="hover:text-primary-600">
-                {task.category?.name || 'Category'}
+            {canSeeGroup ? (
+              <Link to={`/groups/${groupId}`} className="hover:text-primary-600">
+                {task.group?.name || 'Group'}
               </Link>
             ) : (
-              <span className="text-gray-500">{task.category?.name || 'Category'}</span>
+              <span className="text-gray-500">{task.group?.name || 'Group'}</span>
             )}
             <span>/</span>
             {canSeeProject ? (

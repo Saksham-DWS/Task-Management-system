@@ -4,24 +4,24 @@ import { ArrowLeft, Plus, Settings, Trash2 } from 'lucide-react'
 import { useUIStore } from '../../store/ui.store'
 import { useAuthStore } from '../../store/auth.store'
 import { useAccess } from '../../hooks/useAccess'
-import { categoryService } from '../../services/category.service'
+import { groupService } from '../../services/group.service'
 import { projectService } from '../../services/project.service'
 import api from '../../services/api'
 import ProjectCard from '../../components/Cards/ProjectCard'
 import NewProjectModal from '../../components/Modals/NewProjectModal'
 import ConfirmDeleteModal from '../../components/Modals/ConfirmDeleteModal'
-import EditCategoryModal from '../../components/Modals/EditCategoryModal'
+import EditGroupModal from '../../components/Modals/EditGroupModal'
 import EditProjectModal from '../../components/Modals/EditProjectModal'
 import AISummary from '../../components/AI/AISummary'
 
-export default function CategoryDetail() {
+export default function GroupDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { activeModal, modalData, openModal, closeModal } = useUIStore()
   const { user } = useAuthStore()
-  const { canCreateInCategory, isManager } = useAccess()
+  const { canCreateInGroup, isManager } = useAccess()
 
-  const [category, setCategory] = useState(null)
+  const [group, setGroup] = useState(null)
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [accessDenied, setAccessDenied] = useState(false)
@@ -36,62 +36,62 @@ export default function CategoryDetail() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [categoryData, projectsData, usersRes] = await Promise.all([
-        categoryService.getById(id),
-        projectService.getByCategory(id),
+      const [groupData, projectsData, usersRes] = await Promise.all([
+        groupService.getById(id),
+        projectService.getByGroup(id),
         api.get('/users')
       ])
       const usersData = usersRes.data || []
-      const accessUsers = usersData.filter((u) => (u.access?.category_ids || []).includes(id))
+      const accessUsers = usersData.filter((u) => (u.access?.group_ids || []).includes(id))
 
       setProjects(projectsData)
       setUsers(usersData)
-      setCategory({ ...categoryData, accessUsers })
+      setGroup({ ...groupData, accessUsers })
       setAccessDenied(false)
     } catch (error) {
       if (error.response?.status === 403) {
         setAccessDenied(true)
-        setCategory(null)
+        setGroup(null)
         setProjects([])
       } else {
-        console.error('Failed to load category:', error)
+        console.error('Failed to load group:', error)
       }
     } finally {
       setLoading(false)
     }
   }
 
-  const handleUpdateCategory = async (categoryId, formData) => {
+  const handleUpdateGroup = async (groupId, formData) => {
     try {
-      const currentCategory = category
-      const { accessUserIds = [], ...categoryData } = formData
-      const currentAccessIds = new Set((currentCategory?.accessUsers || []).map((user) => user._id))
+      const currentGroup = group
+      const { accessUserIds = [], ...groupData } = formData
+      const currentAccessIds = new Set((currentGroup?.accessUsers || []).map((user) => user._id))
       const newAccessSet = new Set(accessUserIds)
 
       const toAdd = accessUserIds.filter((userId) => !currentAccessIds.has(userId))
       const toRemove = [...currentAccessIds].filter((userId) => !newAccessSet.has(userId))
 
-      const updatedCategory = await categoryService.update(categoryId, categoryData)
+      const updatedGroup = await groupService.update(groupId, groupData)
 
       const accessRequests = [
-        ...toAdd.map((userId) => api.post(`/users/access/${userId}/category`, { itemId: categoryId })),
-        ...toRemove.map((userId) => api.delete(`/users/access/${userId}/category/${categoryId}`))
+        ...toAdd.map((userId) => api.post(`/users/access/${userId}/group`, { itemId: groupId })),
+        ...toRemove.map((userId) => api.delete(`/users/access/${userId}/group/${groupId}`))
       ]
       if (accessRequests.length > 0) {
         await Promise.all(accessRequests)
       }
 
       const updatedAccessUsers = users.filter((user) => newAccessSet.has(user._id))
-      setCategory({ ...updatedCategory, accessUsers: updatedAccessUsers })
+      setGroup({ ...updatedGroup, accessUsers: updatedAccessUsers })
     } catch (error) {
-      console.error('Failed to update category:', error)
+      console.error('Failed to update group:', error)
       throw error
     }
   }
 
   const handleCreateProject = async (formData) => {
     try {
-      const newProject = await projectService.create({ ...formData, categoryId: id })
+      const newProject = await projectService.create({ ...formData, groupId: id })
       setProjects([...projects, newProject])
       await loadData()
     } catch (error) {
@@ -123,20 +123,20 @@ export default function CategoryDetail() {
     }
   }
 
-  const handleDeleteCategory = async () => {
+  const handleDeleteGroup = async () => {
     try {
-      await categoryService.delete(id, projects.length > 0)
-      navigate('/categories')
+      await groupService.delete(id, projects.length > 0)
+      navigate('/groups')
     } catch (error) {
-      console.error('Failed to delete category:', error)
-      alert(error.response?.data?.detail || 'Failed to delete category')
+      console.error('Failed to delete group:', error)
+      alert(error.response?.data?.detail || 'Failed to delete group')
       throw error
     }
   }
 
   const handleOpenEdit = () => {
-    if (category) {
-      openModal('editCategory', { category })
+    if (group) {
+      openModal('editGroup', { group })
     }
   }
 
@@ -165,20 +165,20 @@ export default function CategoryDetail() {
   if (accessDenied) {
     return (
       <div className="text-center py-16">
-        <p className="text-gray-500 dark:text-gray-400">You do not have access to this category</p>
-        <button onClick={() => navigate('/categories')} className="btn-primary mt-4">
-          Back to Categories
+        <p className="text-gray-500 dark:text-gray-400">You do not have access to this group</p>
+        <button onClick={() => navigate('/groups')} className="btn-primary mt-4">
+          Back to Groups
         </button>
       </div>
     )
   }
 
-  if (!category) {
+  if (!group) {
     return (
       <div className="text-center py-16">
-        <p className="text-gray-500 dark:text-gray-400">Category not found</p>
-        <button onClick={() => navigate('/categories')} className="btn-primary mt-4">
-          Back to Categories
+        <p className="text-gray-500 dark:text-gray-400">Group not found</p>
+        <button onClick={() => navigate('/groups')} className="btn-primary mt-4">
+          Back to Groups
         </button>
       </div>
     )
@@ -189,15 +189,15 @@ export default function CategoryDetail() {
       {/* Header */}
       <div className="flex items-center gap-4">
         <button 
-          onClick={() => navigate('/categories')}
+          onClick={() => navigate('/groups')}
           className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
         >
           <ArrowLeft size={20} className="dark:text-gray-300" />
         </button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{category.name}</h1>
-          {category.description && (
-            <p className="text-gray-500 dark:text-gray-400 mt-1">{category.description}</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{group.name}</h1>
+          {group.description && (
+            <p className="text-gray-500 dark:text-gray-400 mt-1">{group.description}</p>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -205,16 +205,16 @@ export default function CategoryDetail() {
             <button 
               onClick={handleOpenEdit}
               className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              title="Edit category"
+              title="Edit group"
             >
               <Settings size={20} className="text-gray-500 dark:text-gray-400" />
             </button>
           )}
           {isAdmin && (
             <button 
-              onClick={() => openModal('deleteCategory')}
+              onClick={() => openModal('deleteGroup')}
               className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600 transition-colors"
-              title="Delete category"
+              title="Delete group"
             >
               <Trash2 size={20} />
             </button>
@@ -228,7 +228,7 @@ export default function CategoryDetail() {
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
               Projects ({projects.length})
             </h2>
-            {canCreateInCategory(id) && (
+            {canCreateInGroup(id) && (
               <button 
                 onClick={() => openModal('newProject')}
                 className="btn-primary flex items-center gap-2"
@@ -245,15 +245,15 @@ export default function CategoryDetail() {
                 <ProjectCard 
                   key={project._id} 
                   project={project} 
-                  canEdit={canCreateInCategory(id) || isManager()}
+                  canEdit={canCreateInGroup(id) || isManager()}
                   onEdit={handleOpenProjectEdit}
                 />
               ))}
             </div>
           ) : (
             <div className="card text-center py-12">
-              <p className="text-gray-500 dark:text-gray-400 mb-4">No projects in this category yet</p>
-              {canCreateInCategory(id) && (
+              <p className="text-gray-500 dark:text-gray-400 mb-4">No projects in this group yet</p>
+              {canCreateInGroup(id) && (
                 <button 
                   onClick={() => openModal('newProject')}
                   className="btn-primary inline-flex items-center gap-2"
@@ -268,9 +268,9 @@ export default function CategoryDetail() {
 
         <div>
           <AISummary 
-            title="Category Insights"
+            title="Group Insights"
             insights={[
-              { type: 'insight', message: `${projects.length} active projects in this category` }
+              { type: 'insight', message: `${projects.length} active projects in this group` }
             ]}
           />
         </div>
@@ -278,31 +278,31 @@ export default function CategoryDetail() {
       {/* Modals */}
       {activeModal === 'newProject' && (
         <NewProjectModal 
-          categoryId={id}
+          groupId={id}
           onSubmit={handleCreateProject}
           users={users}
         />
       )}
 
-      {activeModal === 'deleteCategory' && (
+      {activeModal === 'deleteGroup' && (
         <ConfirmDeleteModal
-          title="Delete Category"
+          title="Delete Group"
           message={
             projects.length > 0
-              ? `Are you sure you want to delete "${category.name}"? This will also delete ${projects.length} project(s) and all their tasks. This action cannot be undone.`
-              : `Are you sure you want to delete "${category.name}"? This action cannot be undone.`
+              ? `Are you sure you want to delete "${group.name}"? This will also delete ${projects.length} project(s) and all their tasks. This action cannot be undone.`
+              : `Are you sure you want to delete "${group.name}"? This action cannot be undone.`
           }
-          onConfirm={handleDeleteCategory}
+          onConfirm={handleDeleteGroup}
           onClose={() => closeModal()}
         />
       )}
 
-      {activeModal === 'editCategory' && modalData?.category && (
-        <EditCategoryModal
-          category={{ ...category, accessUsers: category?.accessUsers || [] }}
+      {activeModal === 'editGroup' && modalData?.group && (
+        <EditGroupModal
+          group={{ ...group, accessUsers: group?.accessUsers || [] }}
           users={users}
-          onSubmit={handleUpdateCategory}
-          onDelete={handleDeleteCategory}
+          onSubmit={handleUpdateGroup}
+          onDelete={handleDeleteGroup}
         />
       )}
 

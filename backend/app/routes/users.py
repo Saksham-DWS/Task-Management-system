@@ -52,7 +52,7 @@ async def create_user(
         "password": get_password_hash(user_data.password),
         "role": user_data.role.value,
         "status": "active",
-        "access": {"category_ids": [], "project_ids": [], "task_ids": []},
+        "access": {"group_ids": [], "project_ids": [], "task_ids": []},
         "notification_preferences": NotificationPreferences().model_dump(),
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
@@ -133,8 +133,8 @@ async def update_user_role(
     return user
 
 
-@router.post("/access/{user_id}/category")
-async def grant_category_access(
+@router.post("/access/{user_id}/group")
+async def grant_group_access(
     user_id: str,
     data: dict,
     current_user: dict = Depends(require_role(["admin", "manager"]))
@@ -144,7 +144,7 @@ async def grant_category_access(
     
     await users.update_one(
         {"_id": ObjectId(user_id)},
-        {"$addToSet": {"access.category_ids": item_id}}
+        {"$addToSet": {"access.group_ids": item_id}}
     )
     
     user = await users.find_one({"_id": ObjectId(user_id)}, {"password": 0})
@@ -152,8 +152,8 @@ async def grant_category_access(
     return user
 
 
-@router.delete("/access/{user_id}/category/{item_id}")
-async def revoke_category_access(
+@router.delete("/access/{user_id}/group/{item_id}")
+async def revoke_group_access(
     user_id: str,
     item_id: str,
     current_user: dict = Depends(require_role(["admin", "manager"]))
@@ -162,7 +162,7 @@ async def revoke_category_access(
     
     await users.update_one(
         {"_id": ObjectId(user_id)},
-        {"$pull": {"access.category_ids": item_id}}
+        {"$pull": {"access.group_ids": item_id}}
     )
     
     user = await users.find_one({"_id": ObjectId(user_id)}, {"password": 0})

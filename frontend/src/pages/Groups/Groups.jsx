@@ -2,14 +2,14 @@ import { useState, useEffect } from 'react'
 import { Plus, Search } from 'lucide-react'
 import { useUIStore } from '../../store/ui.store'
 import { useAccess } from '../../hooks/useAccess'
-import { categoryService } from '../../services/category.service'
+import { groupService } from '../../services/group.service'
 import api from '../../services/api'
-import CategoryCard from '../../components/Cards/CategoryCard'
-import NewCategoryModal from '../../components/Modals/NewCategoryModal'
-import EditCategoryModal from '../../components/Modals/EditCategoryModal'
+import GroupCard from '../../components/Cards/GroupCard'
+import NewGroupModal from '../../components/Modals/NewGroupModal'
+import EditGroupModal from '../../components/Modals/EditGroupModal'
 
-export default function Categories() {
-  const [categories, setCategories] = useState([])
+export default function Groups() {
+  const [groups, setGroups] = useState([])
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -17,79 +17,79 @@ export default function Categories() {
   const { isManager } = useAccess()
 
   useEffect(() => {
-    loadCategories()
+    loadGroups()
   }, [])
 
-  const loadCategories = async () => {
+  const loadGroups = async () => {
     setLoading(true)
     try {
-      const [categoryData, usersRes] = await Promise.all([
-        categoryService.getAll(),
+      const [groupData, usersRes] = await Promise.all([
+        groupService.getAll(),
         api.get('/users')
       ])
       const usersData = usersRes.data || []
       const accessMap = new Map()
       usersData.forEach((user) => {
-        const categoryIds = user.access?.category_ids || []
-        categoryIds.forEach((categoryId) => {
-          if (!accessMap.has(categoryId)) {
-            accessMap.set(categoryId, [])
+        const groupIds = user.access?.group_ids || []
+        groupIds.forEach((groupId) => {
+          if (!accessMap.has(groupId)) {
+            accessMap.set(groupId, [])
           }
-          accessMap.get(categoryId).push(user)
+          accessMap.get(groupId).push(user)
         })
       })
-      const categoriesWithAccess = categoryData.map((category) => ({
-        ...category,
-        accessUsers: accessMap.get(category._id) || []
+      const groupsWithAccess = groupData.map((group) => ({
+        ...group,
+        accessUsers: accessMap.get(group._id) || []
       }))
       setUsers(usersData)
-      setCategories(categoriesWithAccess)
+      setGroups(groupsWithAccess)
     } catch (error) {
-      console.error('Failed to load categories:', error)
+      console.error('Failed to load groups:', error)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleCreateCategory = async (formData) => {
+  const handleCreateGroup = async (formData) => {
     try {
-      const { accessUserIds = [], ...categoryData } = formData
-      const newCategory = await categoryService.create(categoryData)
+      const { accessUserIds = [], ...groupData } = formData
+      const newGroup = await groupService.create(groupData)
       let accessUsers = []
       if (accessUserIds.length > 0) {
         accessUsers = users.filter((user) => accessUserIds.includes(user._id))
         try {
           await Promise.all(
             accessUserIds.map((userId) =>
-              api.post(`/users/access/${userId}/category`, { itemId: newCategory._id })
+              api.post(`/users/access/${userId}/group`, { itemId: newGroup._id })
             )
           )
         } catch (accessError) {
-          console.error('Failed to grant category access:', accessError)
+          console.error('Failed to grant group access:', accessError)
         }
       }
-      setCategories((prev) => [...prev, { ...newCategory, accessUsers }])
+      setGroups((prev) => [...prev, { ...newGroup, accessUsers }])
     } catch (error) {
-      console.error('Failed to create category:', error)
+      console.error('Failed to create group:', error)
       throw error
     }
   }
 
-  const handleUpdateCategory = async (categoryId, formData) => {
+  const handleUpdateGroup = async (groupId, formData) => {
     try {
-      const currentCategory = categories.find((cat) => cat._id === categoryId)
-      const { accessUserIds = [], ...categoryData } = formData
-      const currentAccessIds = new Set((currentCategory?.accessUsers || []).map((user) => user._id))
+      const currentGroup = groups.find((cat) => cat._id === groupId)
+      const { accessUserIds = [], ...groupData } = formData
+      const currentAccessIds = new Set((currentGroup?.accessUsers || []).map((user) => user._id))
       const newAccessSet = new Set(accessUserIds)
 
       const toAdd = accessUserIds.filter((id) => !currentAccessIds.has(id))
       const toRemove = [...currentAccessIds].filter((id) => !newAccessSet.has(id))
 
-      const updatedCategory = await categoryService.update(categoryId, categoryData)
+      const updatedGroup = await groupService.update(groupId, groupData)
 
       const accessRequests = [
-        ...toAdd.map((userId) => api.post(`/users/access/${userId}/category`, { itemId: categoryId })),
-        ...toRemove.map((userId) => api.delete(`/users/access/${userId}/category/${categoryId}`))
+        ...toAdd.map((userId) => api.post(`/users/access/${userId}/group`, { itemId: groupId })),
+        ...toRemove.map((userId) => api.delete(`/users/access/${userId}/group/${groupId}`))
       ]
 
       if (accessRequests.length > 0) {
@@ -98,13 +98,13 @@ export default function Categories() {
 
       setUsers((prevUsers) =>
         prevUsers.map((user) => {
-          const categoryIds = user.access?.category_ids || []
+          const groupIds = user.access?.group_ids || []
           if (toAdd.includes(user._id)) {
             return {
               ...user,
               access: {
                 ...(user.access || {}),
-                category_ids: Array.from(new Set([...categoryIds, categoryId]))
+                group_ids: Array.from(new Set([...groupIds, groupId]))
               }
             }
           }
@@ -113,7 +113,7 @@ export default function Categories() {
               ...user,
               access: {
                 ...(user.access || {}),
-                category_ids: categoryIds.filter((id) => id !== categoryId)
+                group_ids: groupIds.filter((id) => id !== groupId)
               }
             }
           }
@@ -123,50 +123,50 @@ export default function Categories() {
 
       const updatedAccessUsers = users.filter((user) => newAccessSet.has(user._id))
 
-      setCategories((prev) =>
+      setGroups((prev) =>
         prev.map((cat) =>
-          cat._id === categoryId
-            ? { ...updatedCategory, accessUsers: updatedAccessUsers }
+          cat._id === groupId
+            ? { ...updatedGroup, accessUsers: updatedAccessUsers }
             : cat
         )
       )
     } catch (error) {
-      console.error('Failed to update category:', error)
+      console.error('Failed to update group:', error)
       throw error
     }
   }
 
-  const handleOpenEdit = (category) => {
-    openModal('editCategory', { category })
+  const handleOpenEdit = (group) => {
+    openModal('editGroup', { group })
   }
 
-  const handleDeleteCategory = async (categoryId) => {
+  const handleDeleteGroup = async (groupId) => {
     try {
-      await categoryService.delete(categoryId, true)
+      await groupService.delete(groupId, true)
 
-      // Remove category from list
-      setCategories((prev) => prev.filter((cat) => cat._id !== categoryId))
+      // Remove group from list
+      setGroups((prev) => prev.filter((cat) => cat._id !== groupId))
 
-      // Remove category access from users in local state
+      // Remove group access from users in local state
       setUsers((prevUsers) =>
         prevUsers.map((user) => {
-          const categoryIds = user.access?.category_ids || []
+          const groupIds = user.access?.group_ids || []
           return {
             ...user,
             access: {
               ...(user.access || {}),
-              category_ids: categoryIds.filter((id) => id !== categoryId)
+              group_ids: groupIds.filter((id) => id !== groupId)
             }
           }
         })
       )
     } catch (error) {
-      console.error('Failed to delete category:', error)
+      console.error('Failed to delete group:', error)
       throw error
     }
   }
 
-  const filteredCategories = categories.filter(cat =>
+  const filteredGroups = groups.filter(cat =>
     cat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     cat.description?.toLowerCase().includes(searchQuery.toLowerCase())
   )
@@ -184,16 +184,16 @@ export default function Categories() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Categories</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Groups</h1>
           <p className="text-gray-500 mt-1">Organize your projects by business areas</p>
         </div>
         {isManager() && (
           <button 
-            onClick={() => openModal('newCategory')}
+            onClick={() => openModal('newGroup')}
             className="btn-primary flex items-center gap-2"
           >
             <Plus size={18} />
-            New Category
+            New Group
           </button>
         )}
       </div>
@@ -203,20 +203,20 @@ export default function Categories() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
         <input
           type="text"
-          placeholder="Search categories..."
+          placeholder="Search groups..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
         />
       </div>
 
-      {/* Categories Grid */}
-      {filteredCategories.length > 0 ? (
+      {/* Groups Grid */}
+      {filteredGroups.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredCategories.map(category => (
-            <CategoryCard 
-              key={category._id} 
-              category={category} 
+          {filteredGroups.map(group => (
+            <GroupCard 
+              key={group._id} 
+              group={group} 
               canEdit={isManager()}
               onEdit={handleOpenEdit}
             />
@@ -226,7 +226,7 @@ export default function Categories() {
         <div className="card text-center py-16">
           {searchQuery ? (
             <>
-              <p className="text-gray-500 mb-2">No categories match your search</p>
+              <p className="text-gray-500 mb-2">No groups match your search</p>
               <button 
                 onClick={() => setSearchQuery('')}
                 className="text-primary-600 hover:text-primary-700 text-sm font-medium"
@@ -236,14 +236,14 @@ export default function Categories() {
             </>
           ) : (
             <>
-              <p className="text-gray-500 mb-4">No categories yet. Create your first category to get started.</p>
+              <p className="text-gray-500 mb-4">No groups yet. Create your first group to get started.</p>
               {isManager() && (
                 <button 
-                  onClick={() => openModal('newCategory')}
+                  onClick={() => openModal('newGroup')}
                   className="btn-primary inline-flex items-center gap-2"
                 >
                   <Plus size={16} />
-                  Create Category
+                  Create Group
                 </button>
               )}
             </>
@@ -252,16 +252,16 @@ export default function Categories() {
       )}
 
       {/* Modal */}
-      {activeModal === 'newCategory' && (
-        <NewCategoryModal onSubmit={handleCreateCategory} users={users} />
+      {activeModal === 'newGroup' && (
+        <NewGroupModal onSubmit={handleCreateGroup} users={users} />
       )}
 
-      {activeModal === 'editCategory' && modalData?.category && (
-        <EditCategoryModal
-          category={modalData.category}
+      {activeModal === 'editGroup' && modalData?.group && (
+        <EditGroupModal
+          group={modalData.group}
           users={users}
-          onSubmit={handleUpdateCategory}
-          onDelete={handleDeleteCategory}
+          onSubmit={handleUpdateGroup}
+          onDelete={handleDeleteGroup}
         />
       )}
     </div>

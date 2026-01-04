@@ -251,7 +251,7 @@ export default function ProjectDetail() {
   const handleDeleteProject = async (projectId) => {
     try {
       await projectService.delete(projectId, true)
-      navigate('/categories')
+      navigate('/groups')
     } catch (error) {
       console.error('Failed to delete project:', error)
       throw error

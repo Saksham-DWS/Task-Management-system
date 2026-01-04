@@ -1,0 +1,413 @@
+**New Goal Context a feature addtion in the system which will be work and in sync with best Tailwind React UI frontend with backend and Backend Database syncing***
+
+
+1. In our project to close our projects when all tasks under that project reached the completed stage that project will be marked as closed in Internal backend , On frontend UI, and with in DataBase
+until and unless no new task is created/ generated in that project.
+
+
+2. Insight Panel UI , Backend Logic and AI pipeline of Insights updating.
+
+Admin Panel AI Insights Update where admin can view all Users, Groups, and their Projects AI Insights 
+via applying filters
+first remove the current AI recommendations panel in left of AI Insights.
+
+Understand my approach what i am think 
+
+**1st On opening top of AI insight Panel in admin dashboard we will show all backend + DataBase + UI synced 
+KPI boxes
+1.Total Numbers of Groups
+2. Total Projects 
+3. On Going
+4. Overdue [How much projects over from there due date]
+
+& Remove the current kpi type boxes Remove , at risk on track and need attention.
+
+**Note  :  if no filters and anything applied the KPI i mentioned will show full global system data according to their roles.
+
+
+**2nd : Now filter wise Insights in best format**
+
+If no filter was choosen by the admin on AI Insights panel AI generates Overall AI insights of top 5 recent projects and related groups and related tasks
+in a best comprehensive and best formatting way : like with Pointers, Topics, and heading and explaintion
+
+in these particiantions : insights : 
+
+                          Overview : 
+
+                          Conclusions :
+   (like work done, how good work the users are doing, foucus areas, any delay or not, recommendations according to AI of those top recent projects )
+
+   And in Overview AI should also shows who's top 5 Projects Insigths are its is giving : who are in-progress and recently maded and who have more users in it.
+   based on Project level goals and achievements and +7 day of achievement comparison with goal, and commenting , also task level goals and achievements comparision bases and commenting on various task 
+   task , projects , health, health score and analysis
+   levels.
+
+
+
+**Now comes the filters part on basis of which the AI insights will be generated :
+
+**we will apply combinational filter and based on the filter the below modules
+AI insights results will come in Insight Panel for example :   AI Analyis, Project Health and details, Group Performance, 
+group insights, project insights.
+
+***Below KPI there will be filters
+
+1.Group Filter          |            Projects filter            |        Users filter
+
+
+All filters are connected with each other and dependent on each others.
+
+**Groups : groups filter : can select groups from all groups
+          selected : group 1 x, group 2 x, x croos for remove 
+          and also a searchable and scrollbale bar from pool of all groups
+          just like access giving in our system,
+
+          G1 x,  G2 x
+      |Search ALL Groups|
+
+**Projects and Users are also same.
+
+Now here comes the logical part:
+
+***All filters are dependent on each other based on hierarchy
+
+***1 : if user choose any group and when there be delay of 3-4 second the system auto pull all data from 
+that group and AI got the data and generates AI insight and other modules data insights and data change happen.
+
+***2 : So we already know our AI Insights generation feature will dependently pn each other.
+
+for example  :  if user select Group 3 from group pool,
+so when person reaches the next filter which is project only those project will shows on the project pool
+who are comes under the previous choosed group , eg : group 3.
+and its projects =[p1,p2,p3 ] are under group 3. so user could only see projects of group 3 if choosen
+group 3 under groups filter.
+
+and after a 3-4 sec delay Our AI system will generate insights :  based on the all data of choosed
+filters  :  like for example  :  group 3 and project 2  :  insights only with all their deep insights like full users , tasks and other things comes under this combinational filters and data insights.
+
+***C1 : A constraint is there an so it should be understandable and change automatically
+if user not choosed the group filter and only know project name and so it try to filter with projects,
+so our system understands which the choosen project from of which group so our system directly understands , auto shows the Group name under the group filter even if group is not selected by user.
+and again generates AI insights just like before with a 3-4 sec delay. and show whole insights with correct data of selected groups and project.
+
+***C2 : A constraint is there an so it should be understandable and change automatically
+if user not choosed the Group or Projects directly from there filter outs and directly went to users filter 
+and there will full pool of all users showing so admin user select any random user so
+so based on that selected user - previous filters will auto change and show all groups and projects 
+that the choosen user is involved in or have tasks in projects 
+and after the 3-4 sec delay our AI insights will be generated with that choosen user data., and only that user AI insights 
+of its all projects, tasks , commnting, goals & achievement of project level if he is a project owner,  and task level commenting and goals and achievements.
+All AI Insights modules will show the Insights accordingly on based on the selected user data. 
+
+for example  : 
+
+Admin or accessed User directly choose user from the drop or search in user filter In Ai Insight Panel
+ 
+ +------------------------+       +--------------------------------+        +--------------------------------+
+ | Groups : G1 x, G2 x .  |       | Projects : P1 x, P2 x, P3 X .  |        | Users : Saksham x,             |
+ +------------------------+       +--------------------------------+        +--------------------------------+
+
+ Based on the selected user all data where he is involved all access details updated and accordance of the user 
+ all project or groups he is involved is came 
+
+And our smart system only sends all data related to the AI in AI pipeline so AI could generate the best AI Insight Possible
+
+System understands this that this choosen user insight it need to generate ,  so after 3-4 delay system auto gather the filtered
+users data or Only projects or only group.
+
+and send to AI for analysis : Then AI return best looking textual Ai Analyis with Bullets points , project headings, tasks headings Highlighted, topics, goal & achievement summary both at project and at task level at project compares to previous week goal and the achievement entry is matching or not as well 
+takable, with best formatting, no clutterness.
+
++---------------------------------------------------------------------------------------+ 
+| AI Insight  
+|                                                                                          
+|Insights
+|
+|
+|
+|
+|Overview 
+|
+|
+|
+|
+|
+|
+|Conclusions
+|
+|
+|
+|
++---------------------------------------------------------------------------------------+
+
+and based on that other modules of AI insights will also show the results and accurate data 
+
+Projects Health      |      Group Performance
+
+Group Insights       |      Project insights
+
+
+Understand the underlying logic and make a logic so that system only sends seleted users , or groups or project data for AI Insights generation,
+
+case 1 :  Nothings is choosen in filter 3-4 delay system auto send top 5 recent projects data with users, access holders and tasks and group it is in data and it will generate 
+AI Insights.
+
+case 2 : If user choose Only a Group or multiple Groups from group filter our smart system understand that user only want group level to down level AI insights,
+so after 3-4 sec delay after only groups filter choose system Understands, and send all data of both or choosen groups
+to AI to generate AI insights with  :  forexample : Groups topic name then projects under those groups, people under those groups , task under those groups project have 
+and all related data behalf insights will be shown.
+
+case 3 : if user not select group and directly select the project or projects from the project filter system
+system auto shows the groups or group of those choosen project or project in in groups filter and then after delay of 4-5 sec 
+system give all data of those choosen projects only to the AI to generate meaning full Ai insights.
+
+case 4 important ** : User based Ai Insight If Admin user wanted to se only a user insights but he dont know user project or group
+so he directly reach to users filter search / choose the user name form drop down or search base reults, and select that user 
+so our system understand the selectedd user or users projects they are involved in and those groups and project auto shows up in Group and project filter
+then after 5-6 sec delay system gather all related data of those users or user from that of a system and send the all data related to user, if he has project so send project details,
+project level commenting, priority, goals & achievement, and task level goals and achievements, and etc related data to AI so Ai could generate 
+the insights comprehensively and accordingly too.
+
+
+Note  :  those projects who are marked closed by the system so system should not send those projects data or tasks even if the user is selected from the user filter and 
+in that project or task user was the participant or closed marked projects will also not show under project filter even if search they will show blurred and not selectable
+they will only be available in the system and un marked closed only when new task was created in them understand what i am saying.
+
+
+case 5 :  ALL Filters will work in combination and dependend on each other , 
+for example : a normal flow admin user selected , a Group form group filter, then he seleted the project or projects from project
+filter drop down or searchable system one like access system ,  so in user filter drop down, or searchable pool only show those user names who are involved in the selected project or projects 
+or common user who are in both or a project access person or a normal user then the System send the selected user data to Ai to generate Ai insights even if a user is of 
+with project access or a normal user  :  if normal user he must only have task level and only all tasks under those selected projects all data will went to AI , and 
+if user have project level access and also a tasks assignee in that of a project  :  so system send project level data , 
+like Project goals & achievement & as well as commenting as well as task level commenting and goals and achievements.
+
+example just for your understanding like  :  Group  : G1 X.       |  Projects : P1 x,  P2 x.      |     users : U1 from P1, P2. U2 from P1. U3 from P2. U4 from P1.
+
+like that , also another case if user choose Group from group filter
+so like  :  G2 x, so in projects and all projects come under G2 will shown and in user all users will be shown under G2 or if project is selected the 
+filteration is more simple out and now shows only those users name in user filter who are comes under those selected project 
+
+and in each filteration stage if selected or not seleted our system send till filter data to AI to generate AI insights in each 5-6 seconds by understanding user is done
+filtering now send all filtered and related data to Ai to generate AI insights. And show on Ai insights panel and other modules of AI Insights
+
+Understand my thinking my approach and update the UI , Backend logic and data gathering and sending via filters and make best filter logics 
+and update and refine AI insights pipeline with best format , headings, topics and other recommendations and all in sentences and in bullet points
+for best viewing experience.
+
+
+
+
+
+3. we will take/copy the project details component module form the report and place it in place of project health in AI insight
+panel a Module and making sure it will also go in sync with applied filters and if no filter applied show data on according to no filter logic 
+also powered with AI pipeline. with backend UI and Database sync with AI pipeline. and Ai power sync like Ai insights and filteraitons syncs.
+
+
+
+******Potential UI desings with context which will in sync with Backend and Frontend UI and DataBase.*****
+
+AI INSIGHTS MODULE – TEXT BASED UI & FUNCTIONAL SPEC
+1. AI INSIGHTS PANEL (TOP SUMMARY)
+------------------------------------------------------------
+| AI Insights Panel                                       |
+------------------------------------------------------------
+| Total Groups | Total Projects | Ongoing | Overdue       |
+|      X       |        X       |    X    |      X        |
+------------------------------------------------------------
+
+
+Values are dynamic
+
+Updates based on selected filters (Groups / Projects / Users)
+
+2. AI FILTERS SECTION
+2.1 Group Filter
+Groups:
+------------------------------------------------------------
+| [ G1 × ] [ G2 × ] [ G3 × ]                              |
+| -------------------------------------------------------- |
+| 🔍 Search Groups...                                      |
+| -------------------------------------------------------- |
+| • G1                                                     |
+| • G2                                                     |
+| • G3                                                     |
+------------------------------------------------------------
+
+
+Behavior
+
+Multi-select dropdown
+
+Search enabled
+
+Selected items shown as removable chips (×)
+
+Non-selected groups still considered for AI logic (unless explicitly excluded)
+
+2.2 Project Filter
+Projects:
+------------------------------------------------------------
+| [ P1 × ] [ P3 × ]                                       |
+| -------------------------------------------------------- |
+| 🔍 Search Projects...                                    |
+| -------------------------------------------------------- |
+| • P1                                                     |
+| • P2                                                     |
+| • P3                                                     |
+------------------------------------------------------------
+
+
+Behavior
+
+Dependent on selected Groups
+
+Multi-select
+
+Search enabled
+
+2.3 User Filter
+Users:
+------------------------------------------------------------
+| [ U1 × ] [ U2 × ]                                       |
+| -------------------------------------------------------- |
+| 🔍 Search Users...                                       |
+| -------------------------------------------------------- |
+| • User 1                                                 |
+| • User 2                                                 |
+| • User 3                                                 |
+------------------------------------------------------------
+
+
+Behavior
+
+Depends on selected Groups & Projects
+
+If multiple users selected → insights shown per user
+
+If no user selected → overall insights shown
+
+3. AI INSIGHTS OUTPUT (MAIN SECTION)
+============================================================
+| AI INSIGHTS                                              |
+============================================================
+
+Insights:
+- AI will show insights with:
+  • Headings
+  • Sub-headings
+  • Bullet points
+  • Highlights
+  • Proper spacing
+  • Related knowledge/context
+
+------------------------------------------------------------
+Overview:
+- High-level summary of performance
+- Status across selected filters
+- Trends and patterns detected by AI
+
+------------------------------------------------------------
+Conclusion:
+- Work done vs planned
+- Performance quality (good / average / poor)
+- Bottlenecks and delays
+- Focus areas (team / project / user specific)
+
+------------------------------------------------------------
+AI Recommendations:
+- Actionable recommendations by AI
+- Priority-wise suggestions
+- Improvement steps
+- Risk mitigation advice
+------------------------------------------------------------
+
+
+Rules
+
+Content generated dynamically
+
+Based on:
+
+Selected filters
+
+Non-selected filters (contextual AI logic)
+
+If text exceeds threshold (e.g. 2000 words):
+
+Enable internal scroll
+
+Preserve section structure
+
+4. USER-WISE INSIGHTS LOGIC
+Case 1: Multiple Users Selected
+User 1 Insights:
+- Insight point 1
+- Insight point 2
+
+User 2 Insights:
+- Insight point 1
+- Insight point 2
+
+Case 2: Only Project Selected
+Project Level Insights:
+- Overall performance
+- Group contribution
+- Risks and delays
+
+5. LOWER PANELS
+5.1 Project Details / Indicators
+------------------------------------------------------------
+| Project Details / Indicators                            |
+------------------------------------------------------------
+| • Project Name                                           |
+| • Status (Ongoing / Delayed / Completed)                |
+| • Progress %                                             |
+| • Deadline                                               |
+| • Risk Level                                             |
+------------------------------------------------------------
+
+
+Horizontal scroll enabled
+
+Can reuse data from Reports module
+
+5.2 Group Performance
+------------------------------------------------------------
+| Group Performance                                       |
+------------------------------------------------------------
+| • Group Name                                             |
+| • Productivity Score                                    |
+| • Delay Count                                            |
+| • Completion Rate                                       |
+------------------------------------------------------------
+
+6. SCROLL & LAYOUT NOTES
+- Vertical scroll: AI Insights content
+- Horizontal scroll: Project Details section
+- Layout responsive
+- Sections clearly separated
+
+7. CORE LOGIC SUMMARY
+- All insights are AI-generated
+- Based on selected + non-selected filters
+- Context-aware
+- Best refined format always:
+  Heading → Highlights → Bullet Points → Conclusion → Action
+
+
+
+Data Giving and Insights generations : 
+
+Hey I told you that when Admin user chooses a single user , 
+only shows the insights of that user who is choosed under user 
+filter in insights panel and only show the insights of his tasks
+ he is involved in like all tasks he is assigned too , with 
+{task level goals & achievements, commenting and other parameters and activity logs too}, 
+or projects {commenting , goal & achivement, project overview , description , priority status, 
+due date , overdue or not etc parameters} if have project level access , so only give user insights 
+and its related data , and our system understand it and send the gathered data to Ai and AI will generate 
+the insights all modules will be in sync 
+
+Understand what i am saying because of this we will only see AI insights of work and other data of a selected user in user filter
+no other users data will come that how admin will know who much work a user is doing , where to do improvments 

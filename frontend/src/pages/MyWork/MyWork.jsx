@@ -204,7 +204,7 @@ export default function MyWork() {
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-gray-900 truncate">{task.title}</p>
                       <p className="text-sm text-gray-500 truncate">
-                        {task.project?.name || 'No project'} • {task.category?.name || 'No category'}
+                        {task.project?.name || 'No project'} • {task.group?.name || 'No group'}
                       </p>
                     </div>
                   </div>

@@ -33,7 +33,7 @@ class ProjectBase(BaseModel):
 
 
 class ProjectCreate(ProjectBase):
-    category_id: str
+    group_id: str
     access_user_ids: List[str] = Field(default_factory=list, alias="accessUserIds")
     collaborator_ids: List[str] = Field(default_factory=list, alias="collaboratorIds")
 
@@ -53,7 +53,7 @@ class ProjectUpdate(BaseModel):
 
 class ProjectInDB(ProjectBase):
     id: str = Field(alias="_id")
-    category_id: str
+    group_id: str
     owner_id: str
     collaborator_ids: List[str] = []
     access_user_ids: List[str] = []
@@ -69,7 +69,7 @@ class ProjectInDB(ProjectBase):
 
 class ProjectResponse(ProjectBase):
     id: str = Field(alias="_id")
-    category_id: str
+    group_id: str
     owner_id: str
     owner: Optional[Any] = None
     collaborators: List[Any] = []

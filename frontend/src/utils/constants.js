@@ -69,7 +69,7 @@ export const PROJECT_STATUS = {
 export const PROJECT_STATUS_LABELS = {
   [PROJECT_STATUS.ONGOING]: 'Ongoing',
   [PROJECT_STATUS.ON_HOLD]: 'On Hold',
-  [PROJECT_STATUS.COMPLETED]: 'Completed'
+  [PROJECT_STATUS.COMPLETED]: 'Closed'
 }
 
 export const PROJECT_STATUS_COLORS = {
@@ -85,7 +85,7 @@ export const USER_ROLES = {
 }
 
 export const ACCESS_LEVELS = {
-  CATEGORY: 'category',
+  GROUP: 'group',
   PROJECT: 'project',
   TASK: 'task'
 }

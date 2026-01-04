@@ -31,8 +31,8 @@ def get_users_collection():
     return db["users"]
 
 
-def get_categories_collection():
-    return db["categories"]
+def get_groups_collection():
+    return db["groups"]
 
 
 def get_projects_collection():

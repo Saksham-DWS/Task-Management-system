@@ -3,21 +3,21 @@ import { FolderKanban, Users, Lock, Settings } from 'lucide-react'
 import { getInitials, getAvatarColor, calculateProgress } from '../../utils/helpers'
 import { AI_HEALTH_COLORS } from '../../utils/constants'
 
-export default function CategoryCard({ category, onEdit, canEdit = false }) {
+export default function GroupCard({ group, onEdit, canEdit = false }) {
   const navigate = useNavigate()
-  const accessUsers = category.accessUsers || []
+  const accessUsers = group.accessUsers || []
   const accessInitials = accessUsers
     .map((user) => getInitials(user.name))
     .filter((initials) => initials && initials !== '?')
   
   const progress = calculateProgress(
-    category.weeklyAchievements?.length || 0,
-    category.weeklyGoals?.length || 0
+    group.weeklyAchievements?.length || 0,
+    group.weeklyGoals?.length || 0
   )
 
   const getHealthBadge = () => {
-    if (!category.healthStatus) return null
-    const colorClass = AI_HEALTH_COLORS[category.healthStatus] || 'text-gray-600'
+    if (!group.healthStatus) return null
+    const colorClass = AI_HEALTH_COLORS[group.healthStatus] || 'text-gray-600'
     const labels = {
       on_track: 'On Track',
       at_risk: 'At Risk',
@@ -25,14 +25,14 @@ export default function CategoryCard({ category, onEdit, canEdit = false }) {
     }
     return (
       <span className={`text-xs font-medium ${colorClass}`}>
-        {labels[category.healthStatus] || category.healthStatus}
+        {labels[group.healthStatus] || group.healthStatus}
       </span>
     )
   }
 
   return (
     <div 
-      onClick={() => navigate(`/categories/${category._id}`)}
+      onClick={() => navigate(`/groups/${group._id}`)}
       className="card cursor-pointer hover:shadow-md transition-shadow"
     >
       {/* Header */}
@@ -42,8 +42,8 @@ export default function CategoryCard({ category, onEdit, canEdit = false }) {
             <FolderKanban className="text-primary-600" size={20} />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">{category.name}</h3>
-            <p className="text-sm text-gray-500">{category.projectCount || 0} projects</p>
+            <h3 className="font-semibold text-gray-900">{group.name}</h3>
+            <p className="text-sm text-gray-500">{group.projectCount || 0} projects</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -53,10 +53,10 @@ export default function CategoryCard({ category, onEdit, canEdit = false }) {
               type="button"
               onClick={(event) => {
                 event.stopPropagation()
-                onEdit?.(category)
+                onEdit?.(group)
               }}
               className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
-              title="Edit category"
+              title="Edit group"
             >
               <Settings size={16} />
             </button>
@@ -65,9 +65,9 @@ export default function CategoryCard({ category, onEdit, canEdit = false }) {
       </div>
 
       {/* Description */}
-      {category.description && (
+      {group.description && (
         <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-          {category.description}
+          {group.description}
         </p>
       )}
 
@@ -106,7 +106,7 @@ export default function CategoryCard({ category, onEdit, canEdit = false }) {
         ) : (
           <span className="text-sm text-gray-500">No access assigned</span>
         )}
-        {category.isRestricted && (
+        {group.isRestricted && (
           <Lock size={14} className="text-gray-400" />
         )}
       </div>

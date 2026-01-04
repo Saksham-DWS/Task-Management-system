@@ -7,7 +7,7 @@ from ..database import (
     get_tasks_collection,
     get_projects_collection,
     get_users_collection,
-    get_categories_collection,
+    get_groups_collection,
     get_comments_collection
 )
 from ..models import TaskCreate, TaskUpdate, CommentCreate, TaskStatus
@@ -272,7 +272,7 @@ async def check_project_auto_complete(project_id: str):
 async def populate_task(task: dict) -> dict:
     users = get_users_collection()
     projects = get_projects_collection()
-    categories = get_categories_collection()
+    groups = get_groups_collection()
     
     task["_id"] = str(task["_id"])
     
@@ -320,13 +320,13 @@ async def populate_task(task: dict) -> dict:
         except:
             pass
     
-    # Get category
-    if task.get("category_id"):
+    # Get group
+    if task.get("group_id"):
         try:
-            category = await categories.find_one({"_id": ObjectId(task["category_id"])})
-            if category:
-                category["_id"] = str(category["_id"])
-                task["category"] = {"_id": category["_id"], "name": category["name"]}
+            group = await groups.find_one({"_id": ObjectId(task["group_id"])})
+            if group:
+                group["_id"] = str(group["_id"])
+                task["group"] = {"_id": group["_id"], "name": group["name"]}
         except:
             pass
     
@@ -444,10 +444,24 @@ async def create_task(
     tasks = get_tasks_collection()
     projects = get_projects_collection()
     
-    # Get project to get category_id
+    # Get project to get group_id
     project = await projects.find_one({"_id": ObjectId(task_data.project_id)})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    if project.get("status") == "completed":
+        await projects.update_one(
+            {"_id": ObjectId(task_data.project_id)},
+            {
+                "$set": {"status": "ongoing", "updated_at": datetime.utcnow()},
+                "$push": {
+                    "activity": build_activity_entry(
+                        f"Project reopened because a new task was created by {current_user.get('name', 'Unknown')}",
+                        current_user
+                    )
+                }
+            }
+        )
+        project["status"] = "ongoing"
     
     # Process goals if provided
     goals = []
@@ -476,7 +490,7 @@ async def create_task(
         "status": task_data.status.value,
         "priority": task_data.priority.value,
         "project_id": task_data.project_id,
-        "category_id": project["category_id"],
+        "group_id": project["group_id"],
         "assigned_by_id": current_user["_id"],
         "assignee_ids": task_data.assignee_ids,
         "collaborator_ids": task_data.collaborator_ids,
@@ -546,6 +560,7 @@ async def create_task(
         project.get("_id") or task_data.project_id,
         [build_activity_entry(project_description, current_user)]
     )
+    await check_project_auto_complete(task_data.project_id)
     return await populate_task(task_dict)
 
 
@@ -939,6 +954,10 @@ async def delete_task(
 ):
     tasks = get_tasks_collection()
     comments = get_comments_collection()
+
+    existing = await tasks.find_one({"_id": ObjectId(task_id)})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Task not found")
     
     # Delete comments
     await comments.delete_many({"task_id": task_id})
@@ -946,6 +965,8 @@ async def delete_task(
     result = await tasks.delete_one({"_id": ObjectId(task_id)})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Task not found")
+
+    await check_project_auto_complete(existing.get("project_id"))
     
     return {"message": "Task deleted"}
 

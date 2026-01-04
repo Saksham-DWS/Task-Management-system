@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { FileBarChart, Download, Calendar, Users, CheckCircle, Clock, Filter } from 'lucide-react'
-import { categoryService } from '../../services/category.service'
+import { groupService } from '../../services/group.service'
 import { projectService } from '../../services/project.service'
 import { taskService } from '../../services/task.service'
-import { formatDate } from '../../utils/helpers'
+import ProjectDetailsTable from '../../components/Reports/ProjectDetailsTable'
 import { useAccess } from '../../hooks/useAccess'
 import { useAuthStore } from '../../store/auth.store'
 
@@ -12,10 +12,10 @@ export default function Reports() {
   const { user } = useAuthStore()
   const [loading, setLoading] = useState(true)
   const [dateRange, setDateRange] = useState('all')
-  const [selectedCategory, setSelectedCategory] = useState('')
+  const [selectedGroup, setSelectedGroup] = useState('')
   const [selectedProject, setSelectedProject] = useState('')
   const [reportData, setReportData] = useState({
-    categories: [],
+    groups: [],
     projects: [],
     tasks: [],
     completedTasks: 0,
@@ -43,37 +43,37 @@ export default function Reports() {
   const loadData = async () => {
     setLoading(true)
     try {
-      let categories = []
+      let groups = []
       let projects = []
       let tasks = []
       if (isGlobalReports) {
-        const [categoriesData, projectsData, tasksData] = await Promise.all([
-          categoryService.getAll(),
+        const [groupsData, projectsData, tasksData] = await Promise.all([
+          groupService.getAll(),
           projectService.getAll(),
           taskService.getAll()
         ])
-        categories = categoriesData
+        groups = groupsData
         projects = projectsData
         tasks = tasksData
       } else {
         const tasksData = await taskService.getMyTasks()
         const scopedTasks = filterTasksForUser(tasksData)
         if (scopedTasks.length > 0) {
-          const [categoriesData, projectsData] = await Promise.all([
-            categoryService.getAll(),
+          const [groupsData, projectsData] = await Promise.all([
+            groupService.getAll(),
             projectService.getAll()
           ])
           const projectIds = new Set(scopedTasks.map((task) => task.project_id || task.projectId).filter(Boolean))
-          const categoryIds = new Set(scopedTasks.map((task) => task.category_id || task.categoryId).filter(Boolean))
+          const groupIds = new Set(scopedTasks.map((task) => task.group_id || task.groupId).filter(Boolean))
 
           projects = projectsData.filter((project) => projectIds.has(project._id))
           projects.forEach((project) => {
-            const categoryId = project.category_id || project.categoryId
-            if (categoryId) {
-              categoryIds.add(categoryId)
+            const groupId = project.group_id || project.groupId
+            if (groupId) {
+              groupIds.add(groupId)
             }
           })
-          categories = categoriesData.filter((category) => categoryIds.has(category._id))
+          groups = groupsData.filter((group) => groupIds.has(group._id))
         }
         tasks = scopedTasks
       }
@@ -81,7 +81,7 @@ export default function Reports() {
       const completedTasks = tasks.filter(t => t.status === 'completed')
       
       setReportData({
-        categories,
+        groups,
         projects,
         tasks,
         completedTasks: completedTasks.length,
@@ -110,13 +110,13 @@ export default function Reports() {
 
   // Filter data based on selections
   const filteredProjects = reportData.projects.filter(p => {
-    if (selectedCategory && (p.category_id || p.categoryId) !== selectedCategory) return false
+    if (selectedGroup && (p.group_id || p.groupId) !== selectedGroup) return false
     if (selectedProject && p._id !== selectedProject) return false
     return true
   })
 
   const filteredTasks = reportData.tasks.filter(t => {
-    if (selectedCategory && (t.category_id || t.categoryId) !== selectedCategory) return false
+    if (selectedGroup && (t.group_id || t.groupId) !== selectedGroup) return false
     if (selectedProject && (t.project_id || t.projectId) !== selectedProject) return false
     return true
   })
@@ -171,13 +171,13 @@ export default function Reports() {
 
   const handleExport = () => {
     // Generate CSV
-    const headers = ['Project', 'Category', 'Status', 'Tasks', 'Completed', 'Health Score']
+    const headers = ['Project', 'Group', 'Status', 'Tasks', 'Completed', 'Health Score']
     const rows = filteredProjects.map(p => {
       const projectTasks = filteredTasks.filter(t => (t.project_id || t.projectId) === p._id)
       const completedTasks = projectTasks.filter(t => t.status === 'completed')
       return [
         p.name,
-        reportData.categories.find(c => c._id === (p.category_id || p.categoryId))?.name || 'N/A',
+        reportData.groups.find(c => c._id === (p.group_id || p.groupId))?.name || 'N/A',
         p.status,
         projectTasks.length,
         completedTasks.length,
@@ -226,17 +226,17 @@ export default function Reports() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Group</label>
             <select
-              value={selectedCategory}
+              value={selectedGroup}
               onChange={(e) => {
-                setSelectedCategory(e.target.value)
+                setSelectedGroup(e.target.value)
                 setSelectedProject('')
               }}
               className="input-field"
             >
-              <option value="">All Categories</option>
-              {reportData.categories.map(cat => (
+              <option value="">All Groups</option>
+              {reportData.groups.map(cat => (
                 <option key={cat._id} value={cat._id}>{cat.name}</option>
               ))}
             </select>
@@ -250,7 +250,7 @@ export default function Reports() {
             >
               <option value="">All Projects</option>
               {reportData.projects
-                .filter(p => !selectedCategory || (p.category_id || p.categoryId) === selectedCategory)
+                .filter(p => !selectedGroup || (p.group_id || p.groupId) === selectedGroup)
                 .map(proj => (
                   <option key={proj._id} value={proj._id}>{proj.name}</option>
                 ))}
@@ -339,11 +339,11 @@ export default function Reports() {
                 hold: 'bg-yellow-500',
                 completed: 'bg-green-500'
               }
-              const labels = {
-                ongoing: 'Ongoing',
-                hold: 'On Hold',
-                completed: 'Completed'
-              }
+                const labels = {
+                  ongoing: 'Ongoing',
+                  hold: 'On Hold',
+                  completed: 'Closed'
+                }
               return (
                 <div key={status}>
                   <div className="flex items-center justify-between mb-1">
@@ -457,62 +457,7 @@ export default function Reports() {
       {/* Projects Table */}
       <div className="card">
         <h2 className="font-semibold text-gray-900 dark:text-white mb-4">Project Details</h2>
-        {filteredProjects.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200 dark:border-gray-700">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">Project</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">Category</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">Status</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">Tasks</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">Completed</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">Health</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredProjects.map(project => {
-                  const projectTasks = filteredTasks.filter(t => (t.project_id || t.projectId) === project._id)
-                  const completedTasks = projectTasks.filter(t => t.status === 'completed')
-                  const category = reportData.categories.find(c => c._id === (project.category_id || project.categoryId))
-                  const health = projectTasks.length > 0 
-                    ? Math.round((completedTasks.length / projectTasks.length) * 100) 
-                    : 0
-                  
-                  const statusColors = {
-                    ongoing: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-                    hold: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
-                    completed: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-                  }
-                  
-                  return (
-                    <tr key={project._id} className="border-b border-gray-100 dark:border-gray-700">
-                      <td className="py-3 px-4 font-medium text-gray-900 dark:text-white">{project.name}</td>
-                      <td className="py-3 px-4 text-gray-600 dark:text-gray-400">{category?.name || 'N/A'}</td>
-                      <td className="py-3 px-4 text-center">
-                        <span className={`px-2 py-1 text-xs rounded-full ${statusColors[project.status] || 'bg-gray-100 text-gray-700'}`}>
-                          {project.status === 'hold' ? 'On Hold' : project.status?.charAt(0).toUpperCase() + project.status?.slice(1)}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center text-gray-600 dark:text-gray-400">{projectTasks.length}</td>
-                      <td className="py-3 px-4 text-center text-gray-600 dark:text-gray-400">{completedTasks.length}</td>
-                      <td className="py-3 px-4 text-center">
-                        <span className={`font-medium ${
-                          health >= 70 ? 'text-green-600' :
-                          health >= 40 ? 'text-yellow-600' : 'text-red-600'
-                        }`}>
-                          {health}%
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="text-gray-400 text-center py-8">No projects found</p>
-        )}
+        <ProjectDetailsTable projects={filteredProjects} tasks={filteredTasks} groups={reportData.groups} />
       </div>
     </div>
   )

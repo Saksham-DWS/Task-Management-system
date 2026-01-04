@@ -33,7 +33,7 @@ const normalizeProject = (project) => {
     collaboratorIds: project.collaboratorIds || project.collaborator_ids || [],
     startDate,
     endDate,
-    categoryId: project.categoryId || project.category_id,
+    groupId: project.groupId || project.group_id,
     status: statusFromBackend[project.status] || project.status,
     activity: project.activity || []
   }
@@ -63,8 +63,8 @@ export const projectService = {
     return normalizeProject(response.data)
   },
 
-  getByCategory: async (categoryId) => {
-    const response = await api.get(`/projects/category/${categoryId}`)
+  getByGroup: async (groupId) => {
+    const response = await api.get(`/projects/group/${groupId}`)
     return normalizeProjects(response.data)
   },
 
@@ -73,7 +73,7 @@ export const projectService = {
     const payload = {
       name: projectData.name,
       description: projectData.description,
-      category_id: projectData.categoryId,
+      group_id: projectData.groupId,
       accessUserIds: projectData.accessUserIds || [],
       collaboratorIds: projectData.collaborators || projectData.collaboratorIds || [],
       status: statusToBackend[projectData.status] || projectData.status,

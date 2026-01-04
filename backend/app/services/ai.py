@@ -384,7 +384,7 @@ def _ensure_min_words(text: str, min_words: int, extra_sections: List[str]) -> s
     return "\n\n".join([s for s in sections if s])
 
 
-def _admin_expansion_sections(categories, projects, tasks, users):
+def _admin_expansion_sections(groups, projects, tasks, users):
     total_tasks = len(tasks)
     completed = len([t for t in tasks if t.get("status") == "completed"])
     on_hold = len([t for t in tasks if t.get("status") in ["hold", "blocked"]])
@@ -393,18 +393,18 @@ def _admin_expansion_sections(categories, projects, tasks, users):
         if _parse_datetime(t.get("due_date")) and _parse_datetime(t.get("due_date")) < datetime.utcnow() and t.get("status") != "completed"
     ])
     completion_rate = int((completed / total_tasks) * 100) if total_tasks else 0
-    category_names = ", ".join([c.get("name", "Category") for c in categories[:6]]) or "your categories"
+    group_names = ", ".join([c.get("name", "Group") for c in groups[:6]]) or "your groups"
     project_names = ", ".join([p.get("name", "Project") for p in projects[:6]]) or "your projects"
 
     analysis_sections = [
         (
-            f"Portfolio activity spans {len(projects)} projects across {len(categories)} categories. "
+            f"Portfolio activity spans {len(projects)} projects across {len(groups)} groups. "
             f"Overall completion sits at {completion_rate}%, with {overdue} overdue items and {on_hold} on hold. "
             "This indicates momentum but also a need to clear aging work so teams can sustain delivery."
         ),
         (
-            f"Category performance shows uneven health across {category_names}. "
-            "Teams in lower health categories should receive focused check-ins, clearer scope boundaries, "
+            f"Group performance shows uneven health across {group_names}. "
+            "Teams in lower health groups should receive focused check-ins, clearer scope boundaries, "
             "and short cycle goals to regain stability without reducing long term targets."
         ),
         (
@@ -456,7 +456,7 @@ def _admin_expansion_sections(categories, projects, tasks, users):
             "These updates should map directly to the AI insights so leaders can act without extra analysis."
         ),
         (
-            "Align priorities across categories by ranking projects based on business impact and deadline proximity. "
+            "Align priorities across groups by ranking projects based on business impact and deadline proximity. "
             "Projects with low health but high impact deserve immediate support, while low impact work can be paused "
             "to recover capacity."
         ),
@@ -473,7 +473,7 @@ def _admin_expansion_sections(categories, projects, tasks, users):
         (
             "Track and celebrate wins. "
             "Highlight projects that improved health or completed major goals, and reuse the tactics that enabled those results "
-            "across other categories."
+            "across other groups."
         )
     ]
 
@@ -589,9 +589,9 @@ def _clean_ai_text(text: str | None) -> str:
         return ""
     cleaned = str(text)
     patterns = [
-        r"(Category Summaries|Project Summaries|Task Insights|Citations)\s*:?\s*\[.*?\]",
-        r"(category_summaries|project_summaries|task_insights|citations)\s*:?\s*\[.*?\]",
-        r"\[\s*\{[^]]*?\"(?:category_id|project_id|task_id)\"[^]]*?\}\s*\]"
+        r"(Group Summaries|Project Summaries|Task Insights|Citations)\s*:?\s*\[.*?\]",
+        r"(group_summaries|project_summaries|task_insights|citations)\s*:?\s*\[.*?\]",
+        r"\[\s*\{[^]]*?\"(?:group_id|project_id|task_id)\"[^]]*?\}\s*\]"
     ]
     for pattern in patterns:
         cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE | re.DOTALL)
@@ -1132,7 +1132,7 @@ async def generate_project_ai_insights(
     }
 
 
-def _admin_fallback_insights(categories: List[Dict[str, Any]], projects: List[Dict[str, Any]], tasks: List[Dict[str, Any]], users: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _admin_fallback_insights(groups: List[Dict[str, Any]], projects: List[Dict[str, Any]], tasks: List[Dict[str, Any]], users: List[Dict[str, Any]]) -> Dict[str, Any]:
     total_tasks = len(tasks)
     completed = len([t for t in tasks if t.get("status") == "completed"])
     on_hold = len([t for t in tasks if t.get("status") in ["hold", "blocked"]])
@@ -1142,10 +1142,10 @@ def _admin_fallback_insights(categories: List[Dict[str, Any]], projects: List[Di
     ])
 
     analysis = (
-        f"There are {len(projects)} projects across {len(categories)} categories. "
+        f"There are {len(projects)} projects across {len(groups)} groups. "
         f"Task completion stands at {completed} of {total_tasks}, with {overdue} overdue and {on_hold} on hold. "
         "Overall delivery is stable but needs attention on aging work and stalled items. "
-        "Category performance varies, with teams showing uneven workloads."
+        "Group performance varies, with teams showing uneven workloads."
     )
 
     recommendations = (
@@ -1154,9 +1154,9 @@ def _admin_fallback_insights(categories: List[Dict[str, Any]], projects: List[Di
         "Create quick wins by closing near complete tasks and clarifying blockers for stalled work."
     )
 
-    category_summaries = [
-        {"category_id": str(c.get("_id")), "name": c.get("name", ""), "insight": f"{c.get('name','Category')} has {len([p for p in projects if str(p.get('category_id')) == str(c.get('_id'))])} projects and needs regular health check-ins."}
-        for c in categories
+    group_summaries = [
+        {"group_id": str(c.get("_id")), "name": c.get("name", ""), "insight": f"{c.get('name','Group')} has {len([p for p in projects if str(p.get('group_id')) == str(c.get('_id'))])} projects and needs regular health check-ins."}
+        for c in groups
     ]
     project_summaries = [
         {"project_id": str(p.get("_id")), "name": p.get("name", ""), "insight": f"{p.get('name','Project')} needs steady execution to keep tasks moving toward completion."}
@@ -1169,31 +1169,31 @@ def _admin_fallback_insights(categories: List[Dict[str, Any]], projects: List[Di
         "focus_area": "Resolve overdue and blocked tasks with clear ownership.",
         "team_balance": "Balance assignments across team members based on current workload.",
         "quick_win": "Close tasks that are in review or near completion this week.",
-        "category_summaries": category_summaries,
+        "group_summaries": group_summaries,
         "project_summaries": project_summaries,
         "source": "fallback"
     }
 
 
-async def generate_admin_ai_insights(categories: List[Dict[str, Any]], projects: List[Dict[str, Any]], tasks: List[Dict[str, Any]], users: List[Dict[str, Any]]) -> Dict[str, Any]:
+async def generate_admin_ai_insights(groups: List[Dict[str, Any]], projects: List[Dict[str, Any]], tasks: List[Dict[str, Any]], users: List[Dict[str, Any]]) -> Dict[str, Any]:
     totals = {
-        "categories": len(categories),
+        "groups": len(groups),
         "projects": len(projects),
         "tasks": len(tasks),
         "users": len(users)
     }
 
-    category_payload = []
-    for category in categories:
-        category_projects = [p for p in projects if str(p.get("category_id")) == str(category.get("_id"))]
+    group_payload = []
+    for group in groups:
+        group_projects = [p for p in projects if str(p.get("group_id")) == str(group.get("_id"))]
         avg_health = (
-            sum([p.get("health_score", 50) for p in category_projects]) / len(category_projects)
-            if category_projects else 0
+            sum([p.get("health_score", 50) for p in group_projects]) / len(group_projects)
+            if group_projects else 0
         )
-        category_payload.append({
-            "category_id": str(category.get("_id")),
-            "name": category.get("name", ""),
-            "project_count": len(category_projects),
+        group_payload.append({
+            "group_id": str(group.get("_id")),
+            "name": group.get("name", ""),
+            "project_count": len(group_projects),
             "avg_health": int(avg_health)
         })
 
@@ -1215,7 +1215,7 @@ async def generate_admin_ai_insights(categories: List[Dict[str, Any]], projects:
         project_payload.append({
             "project_id": pid,
             "name": project.get("name", ""),
-            "category_id": str(project.get("category_id")),
+            "group_id": str(project.get("group_id")),
             "health_score": project.get("health_score", 50),
             "task_total": len(project_tasks),
             "task_completed": completed,
@@ -1246,7 +1246,7 @@ async def generate_admin_ai_insights(categories: List[Dict[str, Any]], projects:
 
     context = {
         "totals": totals,
-        "categories": category_payload,
+        "groups": group_payload,
         "projects": project_payload,
         "users": user_payload
     }
@@ -1262,19 +1262,19 @@ async def generate_admin_ai_insights(categories: List[Dict[str, Any]], projects:
             schema = (
                 "analysis (400-600 words), recommendations (1000-1500 words), "
                 "focus_area (1 sentence), team_balance (1 sentence), quick_win (1 sentence), "
-                "category_summaries (array of {category_id, name, insight} with ~30 words each), "
+                "group_summaries (array of {group_id, name, insight} with ~30 words each), "
                 "project_summaries (array of {project_id, name, insight} with ~20 words each)."
             )
         else:
             schema = (
                 "analysis (400-600 words), recommendations (1000-1500 words), "
                 "focus_area (1 sentence), team_balance (1 sentence), quick_win (1 sentence). "
-                "Do not include category_summaries or project_summaries."
+                "Do not include group_summaries or project_summaries."
             )
         return (
-            "Generate admin insights for categories, projects, tasks, and users. "
+            "Generate admin insights for groups, projects, tasks, and users. "
             f"Return JSON with keys: {schema} "
-            "Bold category and project names using **double asterisks** inside analysis and recommendations. "
+            "Bold group and project names using **double asterisks** inside analysis and recommendations. "
             "Use only the provided data. "
             "Do not include JSON snippets, arrays, or schema labels inside the text fields."
             f"\n\nContext:\n{json.dumps(context, ensure_ascii=True)}"
@@ -1317,17 +1317,17 @@ async def generate_admin_ai_insights(categories: List[Dict[str, Any]], projects:
         parsed, ai_error = await attempt_ai(False, max_tokens=2000)
         used_ai = parsed is not None
     if not parsed:
-        fallback = _admin_fallback_insights(categories, projects, tasks, users)
+        fallback = _admin_fallback_insights(groups, projects, tasks, users)
         fallback["generated_at"] = _to_iso_z(datetime.utcnow())
         fallback["ai_error"] = ai_error
         return fallback
-    fallback = _admin_fallback_insights(categories, projects, tasks, users)
+    fallback = _admin_fallback_insights(groups, projects, tasks, users)
     analysis = (parsed.get("analysis") or "").strip() or fallback["analysis"]
     recommendations = (parsed.get("recommendations") or "").strip() or fallback["recommendations"]
     focus_area = (parsed.get("focus_area") or "").strip() or fallback["focus_area"]
     team_balance = (parsed.get("team_balance") or "").strip() or fallback["team_balance"]
     quick_win = (parsed.get("quick_win") or "").strip() or fallback["quick_win"]
-    category_summaries = parsed.get("category_summaries") or fallback["category_summaries"]
+    group_summaries = parsed.get("group_summaries") or fallback["group_summaries"]
     project_summaries = parsed.get("project_summaries") or fallback["project_summaries"]
 
     analysis = _clean_ai_text(analysis)
@@ -1335,16 +1335,16 @@ async def generate_admin_ai_insights(categories: List[Dict[str, Any]], projects:
     focus_area = _clean_ai_text(focus_area)
     team_balance = _clean_ai_text(team_balance)
     quick_win = _clean_ai_text(quick_win)
-    category_summaries = _normalize_summary_items(
-        _coerce_list(category_summaries, "category_summaries") or fallback["category_summaries"],
-        "category_id"
-    ) or fallback["category_summaries"]
+    group_summaries = _normalize_summary_items(
+        _coerce_list(group_summaries, "group_summaries") or fallback["group_summaries"],
+        "group_id"
+    ) or fallback["group_summaries"]
     project_summaries = _normalize_summary_items(
         _coerce_list(project_summaries, "project_summaries") or fallback["project_summaries"],
         "project_id"
     ) or fallback["project_summaries"]
 
-    analysis_sections, recommendation_sections = _admin_expansion_sections(categories, projects, tasks, users)
+    analysis_sections, recommendation_sections = _admin_expansion_sections(groups, projects, tasks, users)
     analysis = _ensure_min_words(analysis, 400, analysis_sections)
     analysis = _truncate_words(analysis, 600)
     recommendations = _ensure_min_words(recommendations, 1000, recommendation_sections)
@@ -1356,9 +1356,499 @@ async def generate_admin_ai_insights(categories: List[Dict[str, Any]], projects:
         "focus_area": focus_area,
         "team_balance": team_balance,
         "quick_win": quick_win,
-        "category_summaries": category_summaries,
+        "group_summaries": group_summaries,
         "project_summaries": project_summaries,
         "source": "ai" if used_ai else "fallback",
         "generated_at": _to_iso_z(datetime.utcnow()),
         "ai_error": ai_error if not used_ai else None
     }
+
+
+def _normalize_str_list(values: List[Any] | None) -> List[str]:
+    if not values:
+        return []
+    normalized = []
+    for value in values:
+        if value is None:
+            continue
+        normalized.append(str(value))
+    return list(dict.fromkeys(normalized))
+
+
+def _project_status_label(status: str | None) -> str:
+    labels = {
+        "ongoing": "Ongoing",
+        "hold": "On Hold",
+        "on_hold": "On Hold",
+        "completed": "Closed",
+        "closed": "Closed"
+    }
+    return labels.get(status or "", str(status or ""))
+
+
+def _project_is_closed(project: Dict[str, Any]) -> bool:
+    return str(project.get("status") or "").lower() in ["completed", "closed"]
+
+
+def _project_group_id(project: Dict[str, Any]) -> str:
+    return str(project.get("group_id") or project.get("groupId") or "")
+
+
+def _project_id(project: Dict[str, Any]) -> str:
+    return str(project.get("_id") or project.get("id") or "")
+
+
+def _task_project_id(task: Dict[str, Any]) -> str:
+    return str(task.get("project_id") or task.get("projectId") or "")
+
+
+def _task_due_date(task: Dict[str, Any]):
+    return _parse_datetime(task.get("due_date") or task.get("dueDate"))
+
+
+def _project_due_date(project: Dict[str, Any]):
+    return _parse_datetime(project.get("end_date") or project.get("endDate"))
+
+
+def _task_involves_user(task: Dict[str, Any], user_id: str) -> bool:
+    if not user_id:
+        return False
+    if str(task.get("assigned_by_id")) == user_id:
+        return True
+    if user_id in _normalize_str_list(task.get("assignee_ids") or []):
+        return True
+    if user_id in _normalize_str_list(task.get("collaborator_ids") or []):
+        return True
+    return False
+
+
+def _project_involves_user(project: Dict[str, Any], user_id: str) -> bool:
+    if not user_id:
+        return False
+    if str(project.get("owner_id")) == user_id:
+        return True
+    if user_id in _normalize_str_list(project.get("collaborator_ids") or []):
+        return True
+    if user_id in _normalize_str_list(project.get("access_user_ids") or project.get("accessUserIds") or []):
+        return True
+    return False
+
+
+def _project_has_user_activity(
+    project: Dict[str, Any],
+    project_tasks: List[Dict[str, Any]],
+    user_ids: List[str]
+) -> bool:
+    if not user_ids:
+        return True
+    for user_id in user_ids:
+        if _project_involves_user(project, user_id):
+            return True
+    for task in project_tasks:
+        for user_id in user_ids:
+            if _task_involves_user(task, user_id):
+                return True
+    return False
+
+
+def _project_member_ids(project: Dict[str, Any], project_tasks: List[Dict[str, Any]]) -> List[str]:
+    member_ids = set()
+    owner_id = project.get("owner_id")
+    if owner_id:
+        member_ids.add(str(owner_id))
+    for uid in _normalize_str_list(project.get("access_user_ids") or project.get("accessUserIds") or []):
+        member_ids.add(uid)
+    for uid in _normalize_str_list(project.get("collaborator_ids") or []):
+        member_ids.add(uid)
+    for task in project_tasks:
+        if task.get("assigned_by_id"):
+            member_ids.add(str(task.get("assigned_by_id")))
+        for uid in _normalize_str_list(task.get("assignee_ids") or []):
+            member_ids.add(uid)
+        for uid in _normalize_str_list(task.get("collaborator_ids") or []):
+            member_ids.add(uid)
+    return list(member_ids)
+
+
+def _sort_projects_recent(projects: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _key(project: Dict[str, Any]):
+        created = _parse_datetime(project.get("created_at") or project.get("createdAt"))
+        updated = _parse_datetime(project.get("updated_at") or project.get("updatedAt"))
+        return updated or created or datetime.min
+    return sorted(projects, key=_key, reverse=True)
+
+
+def _build_project_snapshot(
+    project: Dict[str, Any],
+    project_tasks: List[Dict[str, Any]],
+    now: datetime
+) -> Dict[str, Any]:
+    total_tasks = len(project_tasks)
+    completed_tasks = len([t for t in project_tasks if t.get("status") == "completed"])
+    overdue_tasks = len([
+        t for t in project_tasks
+        if _task_due_date(t) and _task_due_date(t) < now and t.get("status") != "completed"
+    ])
+    on_hold_tasks = len([t for t in project_tasks if t.get("status") in ["hold", "on_hold", "blocked"]])
+    members = _project_member_ids(project, project_tasks)
+    project_goals = _project_goal_stats(project)
+    task_goals_total = 0
+    task_goals_achieved = 0
+    goal_window_total = 0
+    goal_window_met = 0
+    for task in project_tasks:
+        task_stats = _task_goal_stats(task)
+        task_goals_total += task_stats.get("goals_total", 0)
+        task_goals_achieved += task_stats.get("goals_achieved", 0)
+        due_at = _parse_datetime(task.get("achievements_due_at") or task.get("goals_created_at"))
+        if due_at:
+            if task.get("goals_created_at") and not task.get("achievements_due_at"):
+                due_at = due_at + timedelta(days=7)
+            if due_at and due_at <= now:
+                goal_window_total += 1
+                if task_stats.get("goals_total") and task_stats.get("goals_achieved") >= task_stats.get("goals_total"):
+                    goal_window_met += 1
+    completion_rate = int((completed_tasks / total_tasks) * 100) if total_tasks else 0
+    return {
+        "project_id": _project_id(project),
+        "name": project.get("name") or "Project",
+        "group_id": _project_group_id(project),
+        "status": project.get("status"),
+        "status_label": _project_status_label(project.get("status")),
+        "task_total": total_tasks,
+        "task_completed": completed_tasks,
+        "task_overdue": overdue_tasks,
+        "task_on_hold": on_hold_tasks,
+        "completion_rate": completion_rate,
+        "member_count": len(members),
+        "project_goals_total": project_goals.get("total", 0),
+        "project_goals_matched": project_goals.get("matched", 0),
+        "task_goals_total": task_goals_total,
+        "task_goals_achieved": task_goals_achieved,
+        "goal_window_total": goal_window_total,
+        "goal_window_met": goal_window_met,
+        "end_date": _to_iso_z(project.get("end_date") or project.get("endDate")),
+        "created_at": _to_iso_z(project.get("created_at") or project.get("createdAt"))
+    }
+
+
+def _build_user_snapshot(
+    user: Dict[str, Any],
+    tasks: List[Dict[str, Any]],
+    now: datetime
+) -> Dict[str, Any]:
+    uid = str(user.get("_id") or user.get("id") or "")
+    user_tasks = [t for t in tasks if _task_involves_user(t, uid)]
+    total_tasks = len(user_tasks)
+    completed_tasks = len([t for t in user_tasks if t.get("status") == "completed"])
+    overdue_tasks = len([
+        t for t in user_tasks
+        if _task_due_date(t) and _task_due_date(t) < now and t.get("status") != "completed"
+    ])
+    goal_total = 0
+    goal_achieved = 0
+    for task in user_tasks:
+        stats = _task_goal_stats(task)
+        goal_total += stats.get("goals_total", 0)
+        goal_achieved += stats.get("goals_achieved", 0)
+    completion_rate = int((completed_tasks / total_tasks) * 100) if total_tasks else 0
+    return {
+        "user_id": uid,
+        "name": user.get("name") or "User",
+        "task_total": total_tasks,
+        "task_completed": completed_tasks,
+        "task_overdue": overdue_tasks,
+        "completion_rate": completion_rate,
+        "task_goals_total": goal_total,
+        "task_goals_achieved": goal_achieved
+    }
+
+
+def _fallback_admin_filter_insights(context: Dict[str, Any]) -> Dict[str, Any]:
+    totals = context.get("totals", {})
+    projects = context.get("projects", [])
+    top_projects = context.get("top_projects", [])
+    users = context.get("users", [])
+
+    total_projects = totals.get("projects", 0)
+    total_groups = totals.get("groups", 0)
+    total_tasks = totals.get("tasks", 0)
+    completed_tasks = totals.get("tasks_completed", 0)
+    overdue_tasks = totals.get("tasks_overdue", 0)
+    completion_rate = int((completed_tasks / total_tasks) * 100) if total_tasks else 0
+
+    overview_summary = (
+        f"Analyzed {total_projects} active projects across {total_groups} groups with {total_tasks} tasks. "
+        f"Completion rate is {completion_rate}% with {overdue_tasks} overdue task(s). "
+        "Top projects highlight current delivery focus, team size, and goal tracking."
+    )
+
+    overview_bullets = []
+    if top_projects:
+        for proj in top_projects:
+            overview_bullets.append(
+                f"**{proj.get('name','Project')}**: {proj.get('status_label')}, "
+                f"{proj.get('task_completed')}/{proj.get('task_total')} tasks done, "
+                f"{proj.get('task_overdue')} overdue, {proj.get('member_count')} members."
+            )
+    if projects:
+        goal_total = sum(p.get("project_goals_total", 0) for p in projects)
+        goal_matched = sum(p.get("project_goals_matched", 0) for p in projects)
+        task_goal_total = sum(p.get("task_goals_total", 0) for p in projects)
+        task_goal_achieved = sum(p.get("task_goals_achieved", 0) for p in projects)
+        overview_bullets.append(
+            f"Project goals matched: {goal_matched}/{goal_total}. "
+            f"Task goals achieved: {task_goal_achieved}/{task_goal_total}."
+        )
+        goal_window_total = sum(p.get("goal_window_total", 0) for p in projects)
+        goal_window_met = sum(p.get("goal_window_met", 0) for p in projects)
+        if goal_window_total:
+            overview_bullets.append(
+                f"7-day goal window: {goal_window_met}/{goal_window_total} tasks met their goal updates."
+            )
+
+    conclusions_bullets = []
+    if overdue_tasks > 0:
+        conclusions_bullets.append("Overdue tasks are creating schedule pressure and need focused follow up.")
+    if completion_rate >= 70:
+        conclusions_bullets.append("Execution momentum is strong with healthy completion rates.")
+    elif completion_rate >= 40:
+        conclusions_bullets.append("Delivery is progressing but still needs higher completion velocity.")
+    else:
+        conclusions_bullets.append("Completion rates are low; teams need tighter weekly planning.")
+    if total_projects == 0:
+        conclusions_bullets.append("No active projects are in scope for this filter set.")
+
+    recommendations_bullets = []
+    if overdue_tasks > 0:
+        recommendations_bullets.append("Prioritize overdue tasks and adjust owners and due dates.")
+    recommendations_bullets.append("Close review-stage work to raise completion momentum.")
+    recommendations_bullets.append("Keep weekly goals short and track achievements after the 7-day window.")
+
+    user_insights = []
+    for user in users:
+        if user.get("task_total", 0) == 0:
+            continue
+        user_insights.append({
+            "user_id": user.get("user_id"),
+            "name": user.get("name"),
+            "overview": [
+                f"{user.get('task_total')} task(s) assigned with {user.get('completion_rate')}% completion."
+            ],
+            "conclusions": [
+                f"{user.get('task_overdue')} overdue task(s) need follow up." if user.get("task_overdue") else "No overdue tasks detected."
+            ],
+            "recommendations": [
+                "Focus on closing high priority tasks and logging goal achievements."
+            ]
+        })
+
+    return {
+        "overview": {"summary": overview_summary, "bullets": overview_bullets},
+        "conclusions": {"bullets": conclusions_bullets},
+        "recommendations": {"bullets": recommendations_bullets},
+        "user_insights": user_insights,
+        "source": "fallback"
+    }
+
+
+async def generate_admin_filter_insights(
+    groups: List[Dict[str, Any]],
+    projects: List[Dict[str, Any]],
+    tasks: List[Dict[str, Any]],
+    users: List[Dict[str, Any]],
+    filters: Dict[str, Any]
+) -> Dict[str, Any]:
+    now = datetime.utcnow()
+    group_ids = _normalize_str_list(filters.get("group_ids") or filters.get("groupIds"))
+    project_ids = _normalize_str_list(filters.get("project_ids") or filters.get("projectIds"))
+    user_ids = _normalize_str_list(filters.get("user_ids") or filters.get("userIds"))
+
+    open_projects = [p for p in projects if not _project_is_closed(p)]
+    tasks_by_project: Dict[str, List[Dict[str, Any]]] = {}
+    for task in tasks:
+        pid = _task_project_id(task)
+        if not pid:
+            continue
+        tasks_by_project.setdefault(pid, []).append(task)
+
+    scoped_projects = open_projects
+    if group_ids:
+        scoped_projects = [p for p in scoped_projects if _project_group_id(p) in group_ids]
+    if project_ids:
+        scoped_projects = [p for p in scoped_projects if _project_id(p) in project_ids]
+    if user_ids:
+        scoped_projects = [
+            p for p in scoped_projects
+            if _project_has_user_activity(p, tasks_by_project.get(_project_id(p), []), user_ids)
+        ]
+
+    no_filters = not group_ids and not project_ids and not user_ids
+    analysis_projects = _sort_projects_recent(scoped_projects)
+    if no_filters and analysis_projects:
+        analysis_projects = analysis_projects[:5]
+
+    analysis_project_ids = {_project_id(p) for p in analysis_projects}
+    scope_project_ids = {_project_id(p) for p in scoped_projects}
+
+    scoped_tasks = [t for t in tasks if _task_project_id(t) in scope_project_ids]
+    analysis_tasks = [t for t in scoped_tasks if _task_project_id(t) in analysis_project_ids]
+    if user_ids:
+        analysis_tasks = [t for t in analysis_tasks if any(_task_involves_user(t, uid) for uid in user_ids)]
+
+    project_snapshots = [
+        _build_project_snapshot(p, tasks_by_project.get(_project_id(p), []), now)
+        for p in analysis_projects
+    ]
+    top_projects = project_snapshots[:5]
+
+    scope_groups = {
+        _project_group_id(p) for p in scoped_projects if _project_group_id(p)
+    }
+    group_map = {str(g.get("_id")): g for g in groups}
+    group_snapshots = []
+    for gid in scope_groups:
+        group = group_map.get(gid)
+        if not group:
+            continue
+        group_projects = [p for p in scoped_projects if _project_group_id(p) == gid]
+        overdue_projects = len([
+            p for p in group_projects
+            if _project_due_date(p) and _project_due_date(p) < now and not _project_is_closed(p)
+        ])
+        group_snapshots.append({
+            "group_id": gid,
+            "name": group.get("name") or "Group",
+            "project_count": len(group_projects),
+            "overdue_projects": overdue_projects
+        })
+
+    user_map = {str(u.get("_id") or u.get("id")): u for u in users}
+    scoped_users = []
+    if user_ids:
+        for uid in user_ids:
+            user = user_map.get(uid)
+            if user:
+                scoped_users.append(_build_user_snapshot(user, scoped_tasks, now))
+    else:
+        user_ids_in_scope = set()
+        for task in scoped_tasks:
+            user_ids_in_scope.update(_normalize_str_list(task.get("assignee_ids") or []))
+        for uid in list(user_ids_in_scope)[:8]:
+            user = user_map.get(uid)
+            if user:
+                scoped_users.append(_build_user_snapshot(user, scoped_tasks, now))
+
+    total_tasks = len(scoped_tasks)
+    completed_tasks = len([t for t in scoped_tasks if t.get("status") == "completed"])
+    overdue_tasks = len([
+        t for t in scoped_tasks
+        if _task_due_date(t) and _task_due_date(t) < now and t.get("status") != "completed"
+    ])
+
+    context = {
+        "filters": {
+            "group_ids": group_ids,
+            "project_ids": project_ids,
+            "user_ids": user_ids
+        },
+        "totals": {
+            "groups": len(scope_groups),
+            "projects": len(scoped_projects),
+            "tasks": total_tasks,
+            "tasks_completed": completed_tasks,
+            "tasks_overdue": overdue_tasks
+        },
+        "projects": project_snapshots,
+        "top_projects": top_projects,
+        "groups": group_snapshots,
+        "users": scoped_users
+    }
+
+    system_prompt = (
+        "You are an AI insights analyst for a project management admin dashboard. "
+        "Provide concise, structured insights with clear bullet points. "
+        "Return JSON only with keys: overview, conclusions, recommendations, user_insights. "
+        "Each section should have bullets arrays; overview should include a short summary. "
+        "If user filters are provided, include user_insights items with user_id and name."
+    )
+
+    user_prompt = (
+        "Generate insights using the context below. "
+        "Use **bold** for project and group names. "
+        "Overview summary should be 80-120 words with 3-6 bullets. "
+        "Conclusions and recommendations should each have 3-6 bullets. "
+        "If user_insights are provided, each should have overview, conclusions, recommendations arrays."
+        f"\n\nContext:\n{json.dumps(context, ensure_ascii=True)}"
+    )
+
+    content, error = await _openai_chat(
+        [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+        max_tokens=1400,
+        json_mode=True,
+        retries=2,
+        return_error=True
+    )
+    parsed = _safe_json_loads(content or "")
+    if not parsed:
+        fallback = _fallback_admin_filter_insights(context)
+        fallback["generated_at"] = _to_iso_z(now)
+        fallback["ai_error"] = error
+        return fallback
+
+    overview = parsed.get("overview")
+    conclusions = parsed.get("conclusions")
+    recommendations = parsed.get("recommendations")
+    user_insights = parsed.get("user_insights") or []
+
+    def _normalize_section(section: Any, include_summary: bool = False) -> Dict[str, Any]:
+        cleaned = {"bullets": []}
+        if include_summary:
+            cleaned["summary"] = ""
+        if isinstance(section, dict):
+            if include_summary:
+                cleaned["summary"] = _clean_ai_text(section.get("summary") or "")
+            bullets = _coerce_list(section.get("bullets") or section.get("points") or [])
+            cleaned["bullets"] = [_clean_ai_text(item) for item in bullets if item]
+            return cleaned
+        if isinstance(section, list):
+            cleaned["bullets"] = [_clean_ai_text(item) for item in section if item]
+            return cleaned
+        if isinstance(section, str):
+            if include_summary:
+                cleaned["summary"] = _clean_ai_text(section)
+            else:
+                cleaned["bullets"] = [_clean_ai_text(section)]
+            return cleaned
+        return cleaned
+
+    cleaned = {
+        "overview": _normalize_section(overview, include_summary=True),
+        "conclusions": _normalize_section(conclusions),
+        "recommendations": _normalize_section(recommendations),
+        "user_insights": []
+    }
+
+    for item in _coerce_list(user_insights):
+        cleaned["user_insights"].append({
+            "user_id": str(item.get("user_id") or ""),
+            "name": _clean_ai_text(item.get("name") or "User"),
+            "overview": [_clean_ai_text(v) for v in _coerce_list(item.get("overview") or []) if v],
+            "conclusions": [_clean_ai_text(v) for v in _coerce_list(item.get("conclusions") or []) if v],
+            "recommendations": [_clean_ai_text(v) for v in _coerce_list(item.get("recommendations") or []) if v]
+        })
+
+    fallback = _fallback_admin_filter_insights(context)
+    if not cleaned["overview"]["summary"] and not cleaned["overview"]["bullets"]:
+        cleaned["overview"] = fallback["overview"]
+    if not cleaned["conclusions"]["bullets"]:
+        cleaned["conclusions"] = fallback["conclusions"]
+    if not cleaned["recommendations"]["bullets"]:
+        cleaned["recommendations"] = fallback["recommendations"]
+    if not cleaned["user_insights"] and fallback.get("user_insights"):
+        cleaned["user_insights"] = fallback["user_insights"]
+
+    cleaned["source"] = "ai"
+    cleaned["generated_at"] = _to_iso_z(now)
+    cleaned["ai_error"] = None
+    return cleaned

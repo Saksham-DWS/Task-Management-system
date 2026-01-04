@@ -19,11 +19,11 @@ export const useAI = () => {
     }
   }, [])
 
-  const getCategoryInsights = useCallback(async (categoryId) => {
+  const getGroupInsights = useCallback(async (groupId) => {
     setLoading(true)
     setError(null)
     try {
-      const data = await aiService.getCategoryInsights(categoryId)
+      const data = await aiService.getGroupInsights(groupId)
       return data
     } catch (err) {
       setError(err.message)
@@ -93,7 +93,7 @@ export const useAI = () => {
     loading,
     error,
     getProjectInsights,
-    getCategoryInsights,
+    getGroupInsights,
     getTaskInsights,
     getGoalsAnalysis,
     getHealthScore,

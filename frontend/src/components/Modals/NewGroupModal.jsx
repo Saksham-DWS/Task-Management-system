@@ -3,7 +3,7 @@ import { X } from 'lucide-react'
 import { useUIStore } from '../../store/ui.store'
 import AccessMultiSelect from '../Inputs/AccessMultiSelect'
 
-export default function NewCategoryModal({ onSubmit, users = [] }) {
+export default function NewGroupModal({ onSubmit, users = [] }) {
   const { closeModal } = useUIStore()
   const [formData, setFormData] = useState({
     name: '',
@@ -21,7 +21,7 @@ export default function NewCategoryModal({ onSubmit, users = [] }) {
       await onSubmit(formData)
       closeModal()
     } catch (error) {
-      console.error('Failed to create category:', error)
+      console.error('Failed to create group:', error)
     } finally {
       setLoading(false)
     }
@@ -32,7 +32,7 @@ export default function NewCategoryModal({ onSubmit, users = [] }) {
       <div className="bg-white rounded-xl w-full max-w-lg mx-4 shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">New Category</h2>
+          <h2 className="text-lg font-semibold text-gray-900">New Group</h2>
           <button 
             onClick={closeModal}
             className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
@@ -45,7 +45,7 @@ export default function NewCategoryModal({ onSubmit, users = [] }) {
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Category Name *
+              Group Name *
             </label>
             <input
               type="text"
@@ -64,7 +64,7 @@ export default function NewCategoryModal({ onSubmit, users = [] }) {
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Brief description of this category..."
+              placeholder="Brief description of this group..."
               rows={3}
               className="input-field resize-none"
             />
@@ -90,7 +90,7 @@ export default function NewCategoryModal({ onSubmit, users = [] }) {
               disabled={loading || !formData.name.trim()}
               className="btn-primary disabled:opacity-50"
             >
-              {loading ? 'Creating...' : 'Create Category'}
+              {loading ? 'Creating...' : 'Create Group'}
             </button>
           </div>
         </form>

@@ -2,9 +2,9 @@ from .user import (
     UserRole, AccessControl, NotificationPreferences, UserBase, UserCreate, UserUpdate,
     UserInDB, UserResponse, UserLogin, Token, TokenData
 )
-from .category import (
-    Goal, Achievement, CategoryBase, CategoryCreate, CategoryUpdate,
-    CategoryInDB, CategoryResponse
+from .group import (
+    Goal, Achievement, GroupBase, GroupCreate, GroupUpdate,
+    GroupInDB, GroupResponse
 )
 from .project import (
     ProjectStatus, ProjectBase, ProjectCreate, ProjectUpdate,

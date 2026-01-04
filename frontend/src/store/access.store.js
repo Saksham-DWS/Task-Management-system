@@ -2,7 +2,7 @@ import { create } from 'zustand'
 
 export const useAccessStore = create((set) => ({
   userAccess: {
-    categoryIds: [],
+    groupIds: [],
     projectIds: [],
     taskIds: []
   },
@@ -13,7 +13,7 @@ export const useAccessStore = create((set) => ({
 
   clearAccess: () => set({
     userAccess: {
-      categoryIds: [],
+      groupIds: [],
       projectIds: [],
       taskIds: []
     }

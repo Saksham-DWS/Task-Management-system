@@ -8,7 +8,7 @@ from ..database import (
     get_projects_collection, 
     get_tasks_collection, 
     get_users_collection,
-    get_categories_collection,
+    get_groups_collection,
     get_comments_collection
 )
 from ..models import ProjectCreate, ProjectUpdate
@@ -68,20 +68,20 @@ def to_object_ids(id_list: list) -> list:
             continue
     return object_ids
 
-def has_category_access(current_user: dict, category_id: str) -> bool:
+def has_group_access(current_user: dict, group_id: str) -> bool:
     role = current_user.get("role", "user")
     if role in ["admin", "manager"]:
         return True
     access = current_user.get("access", {}) or {}
-    return category_id in access.get("category_ids", [])
+    return group_id in access.get("group_ids", [])
 
-def has_project_access(current_user: dict, project_id: str, category_id: str, project: dict | None = None) -> bool:
+def has_project_access(current_user: dict, project_id: str, group_id: str, project: dict | None = None) -> bool:
     role = current_user.get("role", "user")
     if role in ["admin", "manager"]:
         return True
     current_user_id = str(current_user.get("_id"))
     access = current_user.get("access", {}) or {}
-    if category_id in access.get("category_ids", []):
+    if group_id in access.get("group_ids", []):
         return True
     if project_id in access.get("project_ids", []):
         return True
@@ -331,13 +331,13 @@ async def get_projects(current_user: dict = Depends(get_current_user)):
     if user_role in ["admin", "manager"]:
         cursor = projects.find({})
     else:
-        category_ids = user_access.get("category_ids", [])
+        group_ids = user_access.get("group_ids", [])
         project_ids = user_access.get("project_ids", [])
         user_id = current_user.get("_id")
 
         filters = []
-        if category_ids:
-            filters.append({"category_id": {"$in": category_ids}})
+        if group_ids:
+            filters.append({"group_id": {"$in": group_ids}})
         if project_ids:
             filters.append({"_id": {"$in": [ObjectId(pid) for pid in project_ids if ObjectId.is_valid(pid)]}})
         if user_id:
@@ -358,15 +358,15 @@ async def get_projects(current_user: dict = Depends(get_current_user)):
     return result
 
 
-@router.get("/category/{category_id}")
-async def get_projects_by_category(
-    category_id: str,
+@router.get("/group/{group_id}")
+async def get_projects_by_group(
+    group_id: str,
     current_user: dict = Depends(get_current_user)
 ):
     projects = get_projects_collection()
-    if not has_category_access(current_user, category_id):
-        raise HTTPException(status_code=403, detail="Not authorized to view this category")
-    cursor = projects.find({"category_id": {"$in": [category_id, ObjectId(category_id)]}})
+    if not has_group_access(current_user, group_id):
+        raise HTTPException(status_code=403, detail="Not authorized to view this group")
+    cursor = projects.find({"group_id": {"$in": [group_id, ObjectId(group_id)]}})
     
     result = []
     async for project in cursor:
@@ -381,7 +381,7 @@ async def get_project(project_id: str, current_user: dict = Depends(get_current_
     
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    if not has_project_access(current_user, project_id, project.get("category_id", ""), project):
+    if not has_project_access(current_user, project_id, project.get("group_id", ""), project):
         raise HTTPException(status_code=403, detail="Not authorized to view this project")
     
     return await populate_project(project)
@@ -393,17 +393,17 @@ async def create_project(
     current_user: dict = Depends(get_current_user)
 ):
     projects = get_projects_collection()
-    categories = get_categories_collection()
+    groups = get_groups_collection()
 
     incoming = project_data.model_dump(by_alias=True)
     
-    # Verify category exists
-    category_id = incoming.get("categoryId") or project_data.category_id
-    category = await categories.find_one({"_id": ObjectId(category_id)})
-    if not category:
-        raise HTTPException(status_code=404, detail="Category not found")
-    if current_user.get("role") not in ["admin", "manager"] and not has_category_access(current_user, category_id):
-        raise HTTPException(status_code=403, detail="Not authorized to create a project in this category")
+    # Verify group exists
+    group_id = incoming.get("groupId") or project_data.group_id
+    group = await groups.find_one({"_id": ObjectId(group_id)})
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    if current_user.get("role") not in ["admin", "manager"] and not has_group_access(current_user, group_id):
+        raise HTTPException(status_code=403, detail="Not authorized to create a project in this group")
 
     # Safely pick access/collaborators from either snake_case or camelCase
     access_user_ids = normalize_id_list(
@@ -424,7 +424,7 @@ async def create_project(
         "name": project_data.name,
         "description": project_data.description,
         "status": project_data.status.value,
-        "category_id": category_id,
+        "group_id": group_id,
         "start_date": project_data.start_date,
         "end_date": project_data.end_date,
         "owner_id": owner_id,
@@ -471,7 +471,7 @@ async def update_project(
     existing = await projects.find_one({"_id": ObjectId(project_id)})
     if not existing:
         raise HTTPException(status_code=404, detail="Project not found")
-    if not has_project_access(current_user, project_id, existing.get("category_id", ""), existing):
+    if not has_project_access(current_user, project_id, existing.get("group_id", ""), existing):
         raise HTTPException(status_code=403, detail="Not authorized to update this project")
     
     # Prepare incoming data (respect aliases for date fields)
@@ -666,7 +666,7 @@ async def update_project_access(
     existing = await projects.find_one({"_id": ObjectId(project_id)})
     if not existing:
         raise HTTPException(status_code=404, detail="Project not found")
-    if not has_project_access(current_user, project_id, existing.get("category_id", ""), existing):
+    if not has_project_access(current_user, project_id, existing.get("group_id", ""), existing):
         raise HTTPException(status_code=403, detail="Not authorized to update this project")
 
     access_ids = data.get("accessUserIds") or data.get("access_user_ids") or []
@@ -705,7 +705,7 @@ async def add_project_goal(
     project = await projects.find_one({"_id": ObjectId(project_id)})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    if not has_project_access(current_user, project_id, project.get("category_id", ""), project):
+    if not has_project_access(current_user, project_id, project.get("group_id", ""), project):
         raise HTTPException(status_code=403, detail="Not authorized to add goals")
 
     goals = project.get("weekly_goals") or []
@@ -747,7 +747,7 @@ async def add_project_goal_achievement(
     project = await projects.find_one({"_id": ObjectId(project_id)})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    if not has_project_access(current_user, project_id, project.get("category_id", ""), project):
+    if not has_project_access(current_user, project_id, project.get("group_id", ""), project):
         raise HTTPException(status_code=403, detail="Not authorized to log achievements")
 
     goals = project.get("weekly_goals") or []
@@ -848,7 +848,7 @@ async def get_project_comments(
     project = await projects.find_one({"_id": ObjectId(project_id)})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    if not has_project_access(current_user, project_id, project.get("category_id", ""), project):
+    if not has_project_access(current_user, project_id, project.get("group_id", ""), project):
         raise HTTPException(status_code=403, detail="Not authorized")
 
     comments_col = get_comments_collection()
@@ -880,7 +880,7 @@ async def add_project_comment(
     project = await projects.find_one({"_id": ObjectId(project_id)})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    if not has_project_access(current_user, project_id, project.get("category_id", ""), project):
+    if not has_project_access(current_user, project_id, project.get("group_id", ""), project):
         raise HTTPException(status_code=403, detail="Not authorized")
 
     content = (data.get("content") or "").strip()

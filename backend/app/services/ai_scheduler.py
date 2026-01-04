@@ -8,7 +8,7 @@ from ..database import (
     get_ai_insights_collection,
     get_projects_collection,
     get_tasks_collection,
-    get_categories_collection,
+    get_groups_collection,
     get_users_collection,
     get_comments_collection
 )
@@ -224,15 +224,15 @@ async def generate_project_insight(
 
 
 async def generate_admin_insight(triggered_by: str = "system", force_refresh: bool = False) -> dict:
-    categories = get_categories_collection()
+    groups = get_groups_collection()
     projects = get_projects_collection()
     tasks = get_tasks_collection()
     users = get_users_collection()
     insights = get_ai_insights_collection()
 
-    category_list = []
-    async for category in categories.find({}):
-        category_list.append(category)
+    group_list = []
+    async for group in groups.find({}):
+        group_list.append(group)
 
     project_list = []
     async for project in projects.find({}):
@@ -246,7 +246,7 @@ async def generate_admin_insight(triggered_by: str = "system", force_refresh: bo
     async for user in users.find({}, {"password": 0}):
         user_list.append(user)
 
-    result = await generate_admin_ai_insights(category_list, project_list, task_list, user_list)
+    result = await generate_admin_ai_insights(group_list, project_list, task_list, user_list)
     now = datetime.utcnow()
     next_due = _next_due_at(now, settings.ai_admin_interval_hours)
     existing = await insights.find_one({"scope": "admin"})
@@ -263,7 +263,7 @@ async def generate_admin_insight(triggered_by: str = "system", force_refresh: bo
             "focus_area": existing.get("focus_area"),
             "team_balance": existing.get("team_balance"),
             "quick_win": existing.get("quick_win"),
-            "category_summaries": existing.get("category_summaries", []),
+            "group_summaries": existing.get("group_summaries", []),
             "project_summaries": existing.get("project_summaries", []),
             "generated_at": existing.get("generated_at"),
             "generated_by": existing.get("generated_by"),
@@ -290,7 +290,7 @@ async def generate_admin_insight(triggered_by: str = "system", force_refresh: bo
         "focus_area": result.get("focus_area"),
         "team_balance": result.get("team_balance"),
         "quick_win": result.get("quick_win"),
-        "category_summaries": result.get("category_summaries", []),
+        "group_summaries": result.get("group_summaries", []),
         "project_summaries": result.get("project_summaries", []),
         "source": result.get("source", "ai"),
         "ai_error": result.get("ai_error"),

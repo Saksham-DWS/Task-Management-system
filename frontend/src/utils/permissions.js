@@ -1,8 +1,8 @@
 import { USER_ROLES } from './constants'
 
-// Check if user has category-level access
-const getCategoryIds = (userAccess) => (
-  userAccess?.categoryIds || userAccess?.category_ids || []
+// Check if user has group-level access
+const getGroupIds = (userAccess) => (
+  userAccess?.groupIds || userAccess?.group_ids || []
 )
 
 const getProjectIds = (userAccess) => (
@@ -13,41 +13,41 @@ const getTaskIds = (userAccess) => (
   userAccess?.taskIds || userAccess?.task_ids || []
 )
 
-export const canViewCategory = (userAccess, categoryId) => {
+export const canViewGroup = (userAccess, groupId) => {
   if (!userAccess) return false
-  return getCategoryIds(userAccess).includes(categoryId) || userAccess.role === USER_ROLES.ADMIN
+  return getGroupIds(userAccess).includes(groupId) || userAccess.role === USER_ROLES.ADMIN
 }
 
 // Check if user has project-level access
-export const canViewProject = (userAccess, projectId, categoryId) => {
+export const canViewProject = (userAccess, projectId, groupId) => {
   if (!userAccess) return false
   if (userAccess.role === USER_ROLES.ADMIN) return true
-  if (getCategoryIds(userAccess).includes(categoryId)) return true
+  if (getGroupIds(userAccess).includes(groupId)) return true
   return getProjectIds(userAccess).includes(projectId)
 }
 
 // Check if user has task-level access
-export const canViewTask = (userAccess, taskId, projectId, categoryId) => {
+export const canViewTask = (userAccess, taskId, projectId, groupId) => {
   if (!userAccess) return false
   if (userAccess.role === USER_ROLES.ADMIN) return true
-  if (getCategoryIds(userAccess).includes(categoryId)) return true
+  if (getGroupIds(userAccess).includes(groupId)) return true
   if (getProjectIds(userAccess).includes(projectId)) return true
   return getTaskIds(userAccess).includes(taskId)
 }
 
-// Check if user can create in category
-export const canCreateInCategory = (userAccess, categoryId) => {
+// Check if user can create in group
+export const canCreateInGroup = (userAccess, groupId) => {
   if (!userAccess) return false
   if (userAccess.role === USER_ROLES.ADMIN) return true
   if (userAccess.role === USER_ROLES.MANAGER) return true
-  return getCategoryIds(userAccess).includes(categoryId)
+  return getGroupIds(userAccess).includes(groupId)
 }
 
 // Check if user can create in project
-export const canCreateInProject = (userAccess, projectId, categoryId) => {
+export const canCreateInProject = (userAccess, projectId, groupId) => {
   if (!userAccess) return false
   if (userAccess.role === USER_ROLES.ADMIN) return true
-  if (getCategoryIds(userAccess).includes(categoryId)) return true
+  if (getGroupIds(userAccess).includes(groupId)) return true
   return getProjectIds(userAccess).includes(projectId)
 }
 
@@ -55,7 +55,7 @@ export const canCreateInProject = (userAccess, projectId, categoryId) => {
 export const canEditTask = (userAccess, task) => {
   if (!userAccess) return false
   if (userAccess.role === USER_ROLES.ADMIN) return true
-  if (getCategoryIds(userAccess).includes(task.categoryId)) return true
+  if (getGroupIds(userAccess).includes(task.groupId)) return true
   if (getProjectIds(userAccess).includes(task.projectId)) return true
   const userId = userAccess.userId
   const isAssignee = Array.isArray(task.assignees) && task.assignees.some(a => (a._id || a.id) === userId)
@@ -69,7 +69,7 @@ export const canEditTask = (userAccess, task) => {
 export const canDeleteTask = (userAccess, task) => {
   if (!userAccess) return false
   if (userAccess.role === USER_ROLES.ADMIN) return true
-  if (getCategoryIds(userAccess).includes(task.categoryId)) return true
+  if (getGroupIds(userAccess).includes(task.groupId)) return true
   return getProjectIds(userAccess).includes(task.projectId)
 }
 
@@ -80,10 +80,10 @@ export const canManageAccess = (userAccess) => {
 }
 
 // Get user's access level for display
-export const getAccessLevel = (userAccess, categoryId, projectId, taskId) => {
+export const getAccessLevel = (userAccess, groupId, projectId, taskId) => {
   if (!userAccess) return null
   if (userAccess.role === USER_ROLES.ADMIN) return 'admin'
-  if (getCategoryIds(userAccess).includes(categoryId)) return 'category'
+  if (getGroupIds(userAccess).includes(groupId)) return 'group'
   if (getProjectIds(userAccess).includes(projectId)) return 'project'
   if (getTaskIds(userAccess).includes(taskId)) return 'task'
   return null

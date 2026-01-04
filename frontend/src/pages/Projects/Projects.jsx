@@ -84,8 +84,8 @@ export default function Projects() {
   }, [projects, searchQuery])
 
   const canEditProject = (project) => {
-    const categoryId = project.categoryId || project.category_id
-    return isManager() || canCreateInProject(project._id, categoryId)
+    const groupId = project.groupId || project.group_id
+    return isManager() || canCreateInProject(project._id, groupId)
   }
 
   if (loading) {
@@ -130,7 +130,7 @@ export default function Projects() {
       ) : (
         <div className="card text-center py-16">
           <p className="text-gray-500 mb-2">No projects to show right now.</p>
-          <p className="text-sm text-gray-400">Ask an admin or category owner to grant you project access.</p>
+          <p className="text-sm text-gray-400">Ask an admin or group owner to grant you project access.</p>
         </div>
       )}
 

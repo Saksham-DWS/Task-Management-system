@@ -7,14 +7,14 @@ A comprehensive project management application with AI-powered insights, built w
 
 ## Features
 
-- **Category → Project → Task Hierarchy**: Organize work in a structured manner
+- **Group → Project → Task Hierarchy**: Organize work in a structured manner
 - **Kanban Board**: Drag-and-drop task management with Not Started, In Progress, On Hold, Completed
 - **AI Insights**: Goals vs Achievements analysis, project health, and recommendations
 - **Permission-Based Access Control**: Role-based access (Admin, Manager, User)
 - **Weekly Goals & Achievements**: Track progress at project and task levels
 - **Dark Mode**: Full dark theme support with DWS branding
 - **Team Workload Management**: Monitor team capacity and distribution
-- **Reports & Analytics**: Performance metrics with category and project filters
+- **Reports & Analytics**: Performance metrics with group and project filters
 
 ## Tech Stack
 
@@ -149,12 +149,12 @@ dws-project-manager/
 
 | Role | Capabilities |
 |------|-------------|
-| **Admin** | Full access, manage users, delete categories |
-| **Manager** | Create/manage categories and projects, assign tasks |
+| **Admin** | Full access, manage users, delete groups |
+| **Manager** | Create/manage groups and projects, assign tasks |
 | **User** | View assigned tasks, update status, add achievements |
 
 **Access Hierarchy:**
-- Category access → Auto-access to all projects and tasks within
+- Group access → Auto-access to all projects and tasks within
 - Project access → Auto-access to all tasks within
 
 ## API Endpoints
@@ -164,10 +164,10 @@ dws-project-manager/
 - `POST /api/auth/register` - Register
 - `GET /api/auth/me` - Get current user
 
-### Categories
-- `GET /api/categories` - List categories
-- `POST /api/categories` - Create category
-- `DELETE /api/categories/{id}` - Delete category (Admin only)
+### Groups
+- `GET /api/groups` - List groups
+- `POST /api/groups` - Create group
+- `DELETE /api/groups/{id}` - Delete group (Admin only)
 
 ### Projects
 - `GET /api/projects` - List projects

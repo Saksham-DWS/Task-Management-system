@@ -14,23 +14,23 @@ class Achievement(BaseModel):
     text: str
 
 
-class CategoryBase(BaseModel):
+class GroupBase(BaseModel):
     name: str
     description: Optional[str] = None
     color: Optional[str] = "#6366f1"
 
 
-class CategoryCreate(CategoryBase):
+class GroupCreate(GroupBase):
     pass
 
 
-class CategoryUpdate(BaseModel):
+class GroupUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     color: Optional[str] = None
 
 
-class CategoryInDB(CategoryBase):
+class GroupInDB(GroupBase):
     id: str = Field(alias="_id")
     owner_id: str
     weekly_goals: List[Goal] = []
@@ -42,7 +42,7 @@ class CategoryInDB(CategoryBase):
         populate_by_name = True
 
 
-class CategoryResponse(CategoryBase):
+class GroupResponse(GroupBase):
     id: str = Field(alias="_id")
     owner_id: str
     weekly_goals: List[Goal] = []

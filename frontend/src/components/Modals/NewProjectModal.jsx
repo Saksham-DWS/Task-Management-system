@@ -5,13 +5,13 @@ import { PROJECT_STATUS } from '../../utils/constants'
 import { getTodayInputDate } from '../../utils/helpers'
 import AccessMultiSelect from '../Inputs/AccessMultiSelect'
 
-export default function NewProjectModal({ categoryId, onSubmit, users = [] }) {
+export default function NewProjectModal({ groupId, onSubmit, users = [] }) {
   const { closeModal } = useUIStore()
   const todayInputDate = getTodayInputDate()
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    categoryId: categoryId || '',
+    groupId: groupId || '',
     status: PROJECT_STATUS.ONGOING,
     startDate: '',
     endDate: '',
@@ -98,7 +98,7 @@ export default function NewProjectModal({ categoryId, onSubmit, users = [] }) {
             >
               <option value={PROJECT_STATUS.ONGOING}>Ongoing</option>
               <option value={PROJECT_STATUS.ON_HOLD}>On Hold</option>
-              <option value={PROJECT_STATUS.COMPLETED}>Completed</option>
+              <option value={PROJECT_STATUS.COMPLETED}>Closed</option>
             </select>
           </div>
 

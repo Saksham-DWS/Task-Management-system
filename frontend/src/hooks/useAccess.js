@@ -1,10 +1,10 @@
 import { useAccessStore } from '../store/access.store'
 import { useAuthStore } from '../store/auth.store'
 import { 
-  canViewCategory, 
+  canViewGroup, 
   canViewProject, 
   canViewTask,
-  canCreateInCategory,
+  canCreateInGroup,
   canCreateInProject,
   canEditTask,
   canDeleteTask,
@@ -24,18 +24,18 @@ export const useAccess = () => {
 
   return {
     // Check permissions
-    canViewCategory: (categoryId) => canViewCategory(access, categoryId),
-    canViewProject: (projectId, categoryId) => canViewProject(access, projectId, categoryId),
-    canViewTask: (taskId, projectId, categoryId) => canViewTask(access, taskId, projectId, categoryId),
-    canCreateInCategory: (categoryId) => canCreateInCategory(access, categoryId),
-    canCreateInProject: (projectId, categoryId) => canCreateInProject(access, projectId, categoryId),
+    canViewGroup: (groupId) => canViewGroup(access, groupId),
+    canViewProject: (projectId, groupId) => canViewProject(access, projectId, groupId),
+    canViewTask: (taskId, projectId, groupId) => canViewTask(access, taskId, projectId, groupId),
+    canCreateInGroup: (groupId) => canCreateInGroup(access, groupId),
+    canCreateInProject: (projectId, groupId) => canCreateInProject(access, projectId, groupId),
     canEditTask: (task) => canEditTask(access, task),
     canDeleteTask: (task) => canDeleteTask(access, task),
     canManageAccess: () => canManageAccess(access),
     
     // Get access level
-    getAccessLevel: (categoryId, projectId, taskId) => 
-      getAccessLevel(access, categoryId, projectId, taskId),
+    getAccessLevel: (groupId, projectId, taskId) => 
+      getAccessLevel(access, groupId, projectId, taskId),
     
     // Check if admin
     isAdmin: () => user?.role === 'admin',

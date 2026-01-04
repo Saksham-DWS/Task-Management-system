@@ -18,7 +18,7 @@ const statusValue = (user) => (user?.status || 'active').toLowerCase()
 export default function TeamsAccess() {
   const { user: currentUser } = useAuthStore()
   const [users, setUsers] = useState([])
-  const [categories, setCategories] = useState([])
+  const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedUser, setSelectedUser] = useState(null)
@@ -60,12 +60,12 @@ export default function TeamsAccess() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [usersRes, categoriesRes] = await Promise.all([
+      const [usersRes, groupsRes] = await Promise.all([
         api.get('/users'),
-        api.get('/categories')
+        api.get('/groups')
       ])
       setUsers(usersRes.data)
-      setCategories(categoriesRes.data)
+      setGroups(groupsRes.data)
     } catch (error) {
       console.error('Failed to load data:', error)
     } finally {
@@ -165,12 +165,12 @@ export default function TeamsAccess() {
     }
   }
 
-  const handleCategoryAccess = async (userId, categoryId, grant) => {
+  const handleGroupAccess = async (userId, groupId, grant) => {
     try {
       if (grant) {
-        await api.post(`/users/access/${userId}/category`, { itemId: categoryId })
+        await api.post(`/users/access/${userId}/group`, { itemId: groupId })
       } else {
-        await api.delete(`/users/access/${userId}/category/${categoryId}`)
+        await api.delete(`/users/access/${userId}/group/${groupId}`)
       }
       const response = await api.get(`/users/${userId}`)
       setUsers(users.map((user) => (user._id === userId ? response.data : user)))
@@ -182,8 +182,8 @@ export default function TeamsAccess() {
     }
   }
 
-  const hasCategoryAccess = (user, categoryId) => {
-    return user?.access?.category_ids?.includes(categoryId) || false
+  const hasGroupAccess = (user, groupId) => {
+    return user?.access?.group_ids?.includes(groupId) || false
   }
 
   const filteredUsers = users.filter(
@@ -399,27 +399,27 @@ export default function TeamsAccess() {
                   <div>
                     <h4 className="font-medium text-blue-900 dark:text-blue-200">Simplified Access Control</h4>
                     <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                      Grant access to categories. Users with category access can see all projects and tasks within that
-                      category. For specific task access, add users as collaborators on individual tasks.
+                      Grant access to groups. Users with group access can see all projects and tasks within that
+                      group. For specific task access, add users as collaborators on individual tasks.
                     </p>
                   </div>
                 </div>
               </div>
 
               <div>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Category Access</h3>
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Group Access</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                  Select categories this user can access. They will automatically have access to all projects and tasks
-                  within selected categories.
+                  Select groups this user can access. They will automatically have access to all projects and tasks
+                  within selected groups.
                 </p>
 
-                {categories.length > 0 ? (
+                {groups.length > 0 ? (
                   <div className="space-y-2">
-                    {categories.map((category) => {
-                      const hasAccess = hasCategoryAccess(selectedUser, category._id)
+                    {groups.map((group) => {
+                      const hasAccess = hasGroupAccess(selectedUser, group._id)
                       return (
                         <div
-                          key={category._id}
+                          key={group._id}
                           className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
                             hasAccess
                               ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20'
@@ -429,19 +429,19 @@ export default function TeamsAccess() {
                           <div className="flex items-center gap-3">
                             <div
                               className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-semibold"
-                              style={{ backgroundColor: category.color || '#6366f1' }}
+                              style={{ backgroundColor: group.color || '#6366f1' }}
                             >
-                              {category.name?.charAt(0).toUpperCase()}
+                              {group.name?.charAt(0).toUpperCase()}
                             </div>
                             <div>
-                              <p className="font-medium text-gray-900 dark:text-white">{category.name}</p>
+                              <p className="font-medium text-gray-900 dark:text-white">{group.name}</p>
                               <p className="text-sm text-gray-500 dark:text-gray-400">
-                                {category.projects?.length || 0} projects
+                                {group.projects?.length || 0} projects
                               </p>
                             </div>
                           </div>
                           <button
-                            onClick={() => handleCategoryAccess(selectedUser._id, category._id, !hasAccess)}
+                            onClick={() => handleGroupAccess(selectedUser._id, group._id, !hasAccess)}
                             className={`p-2 rounded-lg transition-colors ${
                               hasAccess
                                 ? 'bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 hover:bg-green-200'
@@ -455,7 +455,7 @@ export default function TeamsAccess() {
                     })}
                   </div>
                 ) : (
-                  <p className="text-gray-500 dark:text-gray-400 text-center py-4">No categories available</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-center py-4">No groups available</p>
                 )}
               </div>
 

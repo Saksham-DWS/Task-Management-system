@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends
 from typing import List
+from pydantic import BaseModel, Field
 
 from ..database import get_tasks_collection, get_projects_collection, get_ai_insights_collection
 from ..services.auth import get_current_user, require_role
-from ..services.ai import generate_task_insights, get_ai_recommendations
+from ..services.ai import generate_task_insights, get_ai_recommendations, generate_admin_filter_insights
 from ..services.ai_scheduler import generate_project_insight, generate_admin_insight, serialize_insight, schedule_project_insight
 
 
@@ -24,8 +25,8 @@ def _has_project_access(current_user: dict, project: dict) -> bool:
         return True
     current_user_id = str(current_user.get("_id"))
     access = current_user.get("access", {}) or {}
-    category_id = str(project.get("category_id") or "")
-    if category_id in access.get("category_ids", []):
+    group_id = str(project.get("group_id") or "")
+    if group_id in access.get("group_ids", []):
         return True
     if str(project.get("_id")) in access.get("project_ids", []):
         return True
@@ -38,6 +39,15 @@ def _has_project_access(current_user: dict, project: dict) -> bool:
     return False
 
 router = APIRouter(prefix="/api/ai", tags=["AI"])
+
+
+class AdminInsightFilters(BaseModel):
+    group_ids: List[str] = Field(default_factory=list, alias="groupIds")
+    project_ids: List[str] = Field(default_factory=list, alias="projectIds")
+    user_ids: List[str] = Field(default_factory=list, alias="userIds")
+
+    class Config:
+        populate_by_name = True
 
 
 @router.get("/insights")
@@ -270,3 +280,41 @@ async def generate_admin_ai(
         force_refresh=True
     )
     return {"insight": serialize_insight(payload)}
+
+
+@router.post("/admin/insights/filters")
+async def get_filtered_admin_insights(
+    filters: AdminInsightFilters,
+    current_user: dict = Depends(require_role(["admin", "manager"]))
+):
+    from ..database import get_groups_collection, get_users_collection
+
+    groups = get_groups_collection()
+    projects = get_projects_collection()
+    tasks = get_tasks_collection()
+    users = get_users_collection()
+
+    group_list = []
+    async for group in groups.find({}):
+        group_list.append(group)
+
+    project_list = []
+    async for project in projects.find({}):
+        project_list.append(project)
+
+    task_list = []
+    async for task in tasks.find({}):
+        task_list.append(task)
+
+    user_list = []
+    async for user in users.find({}, {"password": 0}):
+        user_list.append(user)
+
+    insight = await generate_admin_filter_insights(
+        group_list,
+        project_list,
+        task_list,
+        user_list,
+        filters.model_dump(by_alias=True)
+    )
+    return {"insight": insight}

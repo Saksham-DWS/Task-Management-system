@@ -23,19 +23,19 @@ export default function Sidebar() {
   const { isManager, userAccess } = useAccess()
   const { user, logout, refreshUser } = useAuth()
 
-  // Always refresh user/access on mount so newly granted project/category access appears
+  // Always refresh user/access on mount so newly granted project/group access appears
   useEffect(() => {
     refreshUser().catch(() => {})
   }, [])
 
-  const categoryIds = userAccess?.categoryIds || userAccess?.category_ids || []
+  const groupIds = userAccess?.groupIds || userAccess?.group_ids || []
   const projectIds = userAccess?.projectIds || userAccess?.project_ids || []
-  const hasCategoryAccess = isManager() || categoryIds.length > 0
-  const hasProjectAccess = isManager() || hasCategoryAccess || projectIds.length > 0
+  const hasGroupAccess = isManager() || groupIds.length > 0
+  const hasProjectAccess = isManager() || hasGroupAccess || projectIds.length > 0
 
   const navItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', show: true },
-    { path: '/categories', icon: FolderKanban, label: 'Categories', show: hasCategoryAccess },
+    { path: '/groups', icon: FolderKanban, label: 'Groups', show: hasGroupAccess },
     { path: '/projects', icon: Briefcase, label: 'Projects', show: hasProjectAccess },
     { path: '/my-work', icon: ListTodo, label: 'My Work', show: true },
     { path: '/notifications', icon: Bell, label: 'Notifications', show: true },

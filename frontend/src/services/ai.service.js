@@ -11,8 +11,8 @@ export const aiService = {
     return response.data
   },
 
-  getCategoryInsights: async (categoryId) => {
-    const response = await api.get(`/ai/categories/${categoryId}/insights`)
+  getGroupInsights: async (groupId) => {
+    const response = await api.get(`/ai/groups/${groupId}/insights`)
     return response.data
   },
 
@@ -58,6 +58,11 @@ export const aiService = {
 
   generateAdminInsights: async () => {
     const response = await api.post('/ai/admin/generate')
+    return response.data
+  },
+
+  getFilteredAdminInsights: async (filters) => {
+    const response = await api.post('/ai/admin/insights/filters', filters)
     return response.data
   }
 }

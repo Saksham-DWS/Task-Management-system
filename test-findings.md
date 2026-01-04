@@ -6,7 +6,7 @@
 
 ## Dashboard
 - **Status**: PASSED
-- Shows categories, tasks, and AI insights
+- Shows groups, tasks, and AI insights
 - Welcome message displays correctly
 
 ## Completed Tests
@@ -17,11 +17,11 @@
 
 ### 2. Dashboard
 - **Status**: PASSED
-- Shows categories, tasks, and welcome message
+- Shows groups, tasks, and welcome message
 
-### 3. Categories Page
+### 3. Groups Page
 - **Status**: PASSED
-- Can view categories
+- Can view groups
 - Goals & Achievements tab works
 - Delete button visible
 
@@ -40,11 +40,11 @@
 - **Status**: PASSED
 - User list displays correctly
 - Edit/Delete buttons visible
-- Category access permissions work
+- Group access permissions work
 
 ### 7. Reports Page
 - **Status**: PASSED
-- Category, Project, and Time Range filters available
+- Group, Project, and Time Range filters available
 - Export CSV button present
 - Task status shows "On Hold" correctly
 

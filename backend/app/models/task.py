@@ -81,7 +81,7 @@ class TaskUpdate(BaseModel):
 class TaskInDB(TaskBase):
     id: str = Field(alias="_id")
     project_id: str
-    category_id: str
+    group_id: str
     assigned_by_id: str
     assignee_ids: List[str] = []
     collaborator_ids: List[str] = []
@@ -106,13 +106,13 @@ class TaskInDB(TaskBase):
 class TaskResponse(TaskBase):
     id: str = Field(alias="_id")
     project_id: str
-    category_id: str
+    group_id: str
     assigned_by_id: str
     assigned_by: Optional[Any] = None
     assignees: List[Any] = []
     collaborators: List[Any] = []
     project: Optional[Any] = None
-    category: Optional[Any] = None
+    group: Optional[Any] = None
     assigned_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
     completed_at: Optional[datetime] = None

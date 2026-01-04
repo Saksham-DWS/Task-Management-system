@@ -17,7 +17,7 @@ const normalizeTask = (task) => {
     ...task,
     dueDate,
     assignedDate,
-    categoryId: task.categoryId || task.category_id,
+    groupId: task.groupId || task.group_id,
     projectId: task.projectId || task.project_id
   }
 }

@@ -113,7 +113,7 @@ export default function EditProjectModal({ project, onSubmit, onDelete, users = 
             >
               <option value={PROJECT_STATUS.ONGOING}>Ongoing</option>
               <option value={PROJECT_STATUS.ON_HOLD}>On Hold</option>
-              <option value={PROJECT_STATUS.COMPLETED}>Completed</option>
+              <option value={PROJECT_STATUS.COMPLETED}>Closed</option>
             </select>
           </div>
 

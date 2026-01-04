@@ -4,8 +4,8 @@ import ProtectedRoute from './ProtectedRoute'
 // Pages
 import Login from '../pages/Login/Login'
 import Dashboard from '../pages/Dashboard/Dashboard'
-import Categories from '../pages/Categories/Categories'
-import CategoryDetail from '../pages/CategoryDetail/CategoryDetail'
+import Groups from '../pages/Groups/Groups'
+import GroupDetail from '../pages/GroupDetail/GroupDetail'
 import ProjectDetail from '../pages/ProjectDetail/ProjectDetail'
 import TaskDetail from '../pages/TaskDetail/TaskDetail'
 import Projects from '../pages/Projects/Projects'
@@ -23,8 +23,8 @@ export default function AppRoutes() {
       
       <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-      <Route path="/categories" element={<ProtectedRoute><Categories /></ProtectedRoute>} />
-      <Route path="/categories/:id" element={<ProtectedRoute><CategoryDetail /></ProtectedRoute>} />
+      <Route path="/groups" element={<ProtectedRoute><Groups /></ProtectedRoute>} />
+      <Route path="/groups/:id" element={<ProtectedRoute><GroupDetail /></ProtectedRoute>} />
       <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
       <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
       <Route path="/tasks/:id" element={<ProtectedRoute><TaskDetail /></ProtectedRoute>} />

@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { Plus, ChevronRight, Calendar, User } from 'lucide-react'
 import { useAuthStore } from '../../store/auth.store'
 import { useAccess } from '../../hooks/useAccess'
-import { categoryService } from '../../services/category.service'
 import { taskService } from '../../services/task.service'
 import { projectService } from '../../services/project.service'
 import AISummary from '../../components/AI/AISummary'
@@ -110,11 +109,11 @@ export default function Dashboard() {
         </div>
         {isManager() && (
           <button 
-            onClick={() => navigate('/categories')}
+            onClick={() => navigate('/groups')}
             className="btn-primary flex items-center gap-2"
           >
             <Plus size={18} />
-            Open Catergories
+            Open Groups
           </button>
         )}
       </div>
@@ -179,7 +178,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Projects</h2>
               <button 
-                onClick={() => navigate('/categories')}
+                onClick={() => navigate('/groups')}
                 className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium flex items-center gap-1"
               >
                 View All <ChevronRight size={16} />
@@ -196,14 +195,14 @@ export default function Dashboard() {
                   >
                     <div 
                       className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-semibold"
-                      style={{ backgroundColor: project.category?.color || '#6366f1' }}
+                      style={{ backgroundColor: project.group?.color || '#6366f1' }}
                     >
                       {project.name?.charAt(0).toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-gray-900 dark:text-white truncate">{project.name}</p>
                       <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                        {project.category?.name || 'No category'}
+                        {project.group?.name || 'No group'}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
@@ -223,7 +222,7 @@ export default function Dashboard() {
                 <p className="text-gray-500 dark:text-gray-400 mb-4">No projects yet</p>
                 {isManager() && (
                   <button 
-                    onClick={() => navigate('/categories')}
+                    onClick={() => navigate('/groups')}
                     className="btn-primary inline-flex items-center gap-2"
                   >
                     <Plus size={16} />

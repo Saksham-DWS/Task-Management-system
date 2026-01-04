@@ -16,7 +16,7 @@ class UserStatus(str, Enum):
 
 
 class AccessControl(BaseModel):
-    category_ids: List[str] = []
+    group_ids: List[str] = []
     project_ids: List[str] = []
     task_ids: List[str] = []
 

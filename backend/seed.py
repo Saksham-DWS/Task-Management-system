@@ -34,28 +34,28 @@ async def seed_database():
             "email": "admin@dws.com",
             "password": hash_password("admin123"),
             "role": "admin",
-            "access": {"category_ids": [], "project_ids": [], "task_ids": []},
+            "access": {"group_ids": [], "project_ids": [], "task_ids": []},
         },
         {
             "name": "John User",
             "email": "john@dws.com",
             "password": hash_password("password123"),
             "role": "user",
-            "access": {"category_ids": [], "project_ids": [], "task_ids": []},
+            "access": {"group_ids": [], "project_ids": [], "task_ids": []},
         },
         {
             "name": "Sarah Developer",
             "email": "sarah@dws.com",
             "password": hash_password("password123"),
             "role": "user",
-            "access": {"category_ids": [], "project_ids": [], "task_ids": []},
+            "access": {"group_ids": [], "project_ids": [], "task_ids": []},
         },
         {
             "name": "Mike Designer",
             "email": "mike@dws.com",
             "password": hash_password("password123"),
             "role": "user",
-            "access": {"category_ids": [], "project_ids": [], "task_ids": []},
+            "access": {"group_ids": [], "project_ids": [], "task_ids": []},
         },
     ]
 
@@ -78,13 +78,13 @@ async def seed_database():
             print(f"  Updated password for: {user['email']}")
 
     total_users = await users_collection.count_documents({})
-    total_categories = await db["categories"].count_documents({})
+    total_groups = await db["groups"].count_documents({})
     total_projects = await db["projects"].count_documents({})
     total_tasks = await db["tasks"].count_documents({})
 
     print(f"\n--- Database Summary ---")
     print(f"  Users: {total_users}")
-    print(f"  Categories: {total_categories}")
+    print(f"  Groups: {total_groups}")
     print(f"  Projects: {total_projects}")
     print(f"  Tasks: {total_tasks}")
 

@@ -159,3 +159,12 @@ If you want, I can implement:
 WebSocket/SSE live updates for tasks, activity, notifications.
 Redis pub/sub + background worker.
 Load testing script to measure real 1–2s SLA on your hardware.
+
+
+
+
+
+
+
+1. Change the name of categories or category from the system to Group and groups in all means of the application
+where we use categories or category even in the backend , Backend Database, and from the frontend UI.

@@ -16,7 +16,7 @@ async def test_project_update_activity_log():
             "name": "Test Project",
             "description": "Initial description",
             "status": "ongoing",
-            "category_id": "000000000000000000000000",  # dummy category id
+            "group_id": "000000000000000000000000",  # dummy group id
             "start_date": "2025-01-01",
             "end_date": "2025-12-31"
         },
