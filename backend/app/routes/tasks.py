@@ -74,6 +74,27 @@ def dt_to_iso_z(value):
     return None
 
 
+def format_email_datetime(value):
+    """Format datetime-like values for emails (e.g. Mon, Jan 05, 2026 12:00 AM UTC)."""
+    if not value:
+        return None
+    parsed = None
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except Exception:
+            return None
+    if not parsed:
+        return None
+    if parsed.tzinfo:
+        parsed = parsed.astimezone(timezone.utc)
+    else:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.strftime("%a, %b %d, %Y %I:%M %p UTC")
+
+
 def status_label(status: str) -> str:
     labels = {
         TaskStatus.NOT_STARTED.value: "Not Started",
@@ -520,8 +541,8 @@ async def create_task(
     if task_data.assignee_ids:
         actor_name = current_user.get("name", "Unknown")
         assignment_message = f'You have been assigned to task "{task_data.title}" by {actor_name}.'
-        due_label = dt_to_iso_z(task_data.due_date) if task_data.due_date else None
-        assigned_label = dt_to_iso_z(task_data.assigned_date) if task_data.assigned_date else None
+        due_label = format_email_datetime(task_data.due_date) if task_data.due_date else None
+        assigned_label = format_email_datetime(task_data.assigned_date) if task_data.assigned_date else None
         project_name = project.get("name") if project else None
         subject = f'Task Assigned: {task_data.title}'
         email_lines = [
@@ -752,7 +773,7 @@ async def update_task(
         ]
         if project_name:
             email_lines.append(f"Project: {project_name}")
-        due_label = dt_to_iso_z(task.get("due_date")) if task else None
+        due_label = format_email_datetime(task.get("due_date")) if task else None
         if due_label:
             email_lines.append(f"Due date: {due_label}")
         email_body = assignment_message + "\n\n" + "\n".join(email_lines)
