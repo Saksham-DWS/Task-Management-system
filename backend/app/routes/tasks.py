@@ -1,7 +1,9 @@
-from fastapi import APIRouter, HTTPException, status, Depends
-from bson import ObjectId
+import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import List
+
+from fastapi import APIRouter, HTTPException, status, Depends
+from bson import ObjectId
 
 from ..database import (
     get_tasks_collection,
@@ -258,6 +260,155 @@ def normalize_activity_entries(activity_raw: list) -> list:
         })
     return normalized
 
+async def _fetch_user_map(user_ids: set) -> dict:
+    if not user_ids:
+        return {}
+    users = get_users_collection()
+    object_ids = []
+    for uid in user_ids:
+        try:
+            object_ids.append(ObjectId(uid))
+        except Exception:
+            continue
+    if not object_ids:
+        return {}
+    cursor = users.find({"_id": {"$in": object_ids}}, {"password": 0})
+    user_map = {}
+    async for user in cursor:
+        user["_id"] = str(user["_id"])
+        user_map[user["_id"]] = user
+    return user_map
+
+async def _fetch_project_map(project_ids: set) -> dict:
+    if not project_ids:
+        return {}
+    projects = get_projects_collection()
+    object_ids = []
+    for pid in project_ids:
+        try:
+            object_ids.append(ObjectId(pid))
+        except Exception:
+            continue
+    if not object_ids:
+        return {}
+    cursor = projects.find({"_id": {"$in": object_ids}}, {"name": 1})
+    project_map = {}
+    async for project in cursor:
+        project_map[str(project["_id"])] = project
+    return project_map
+
+async def _fetch_group_map(group_ids: set) -> dict:
+    if not group_ids:
+        return {}
+    groups = get_groups_collection()
+    object_ids = []
+    for gid in group_ids:
+        try:
+            object_ids.append(ObjectId(gid))
+        except Exception:
+            continue
+    if not object_ids:
+        return {}
+    cursor = groups.find({"_id": {"$in": object_ids}}, {"name": 1})
+    group_map = {}
+    async for group in cursor:
+        group_map[str(group["_id"])] = group
+    return group_map
+
+async def populate_tasks_bulk(tasks: list) -> list:
+    if not tasks:
+        return []
+    user_ids = set()
+    project_ids = set()
+    group_ids = set()
+
+    for task in tasks:
+        task["_id"] = str(task["_id"])
+        assigned_by_id = task.get("assigned_by_id")
+        if assigned_by_id:
+            user_ids.add(str(assigned_by_id))
+        for aid in task.get("assignee_ids", []) or []:
+            user_ids.add(str(aid))
+        for cid in task.get("collaborator_ids", []) or []:
+            user_ids.add(str(cid))
+        if task.get("project_id"):
+            project_ids.add(str(task.get("project_id")))
+        if task.get("group_id"):
+            group_ids.add(str(task.get("group_id")))
+
+    user_task = _fetch_user_map(user_ids)
+    project_task = _fetch_project_map(project_ids)
+    group_task = _fetch_group_map(group_ids)
+    user_map, project_map, group_map = await asyncio.gather(user_task, project_task, group_task)
+
+    for task in tasks:
+        assigned_by_id = str(task.get("assigned_by_id") or "")
+        if assigned_by_id and assigned_by_id in user_map:
+            task["assigned_by"] = user_map[assigned_by_id]
+
+        assignees = []
+        for aid in task.get("assignee_ids", []) or []:
+            uid = str(aid)
+            if uid in user_map:
+                assignees.append(user_map[uid])
+        task["assignees"] = assignees
+
+        collaborators = []
+        for cid in task.get("collaborator_ids", []) or []:
+            uid = str(cid)
+            if uid in user_map:
+                collaborators.append(user_map[uid])
+        task["collaborators"] = collaborators
+
+        project_id = task.get("project_id")
+        if project_id:
+            pid = str(project_id)
+            project = project_map.get(pid)
+            if project:
+                task["project"] = {"_id": pid, "name": project.get("name")}
+
+        group_id = task.get("group_id")
+        if group_id:
+            gid = str(group_id)
+            group = group_map.get(gid)
+            if group:
+                task["group"] = {"_id": gid, "name": group.get("name")}
+
+        risk_analysis = await analyze_task_risk(task)
+        task["ai_risk"] = risk_analysis["ai_risk"]
+        task["ai_risk_reason"] = risk_analysis["ai_risk_reason"]
+
+        task["can_add_achievements"] = False
+        if task.get("goals_created_at"):
+            goals_created = task["goals_created_at"]
+            if isinstance(goals_created, str):
+                goals_created = datetime.fromisoformat(goals_created.replace('Z', '+00:00'))
+            if datetime.utcnow() >= goals_created + timedelta(days=7):
+                task["can_add_achievements"] = True
+
+        activity_entries = normalize_activity_entries(task.get("activity", []))
+        def _activity_sort_key(item: dict):
+            ts = item.get("timestamp")
+            if not ts:
+                return datetime.min
+            try:
+                return datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+            except Exception:
+                return datetime.min
+        task["activity"] = sorted(activity_entries, key=_activity_sort_key, reverse=True)
+
+        goals = task.get("weekly_goals") or []
+        normalized_goals = []
+        for g in goals:
+            if isinstance(g, dict):
+                g = dict(g)
+                g["created_at"] = dt_to_iso_z(g.get("created_at"))
+                g["achieved_at"] = dt_to_iso_z(g.get("achieved_at"))
+            normalized_goals.append(g)
+        task["weekly_goals"] = normalized_goals
+
+    return tasks
+
 async def check_project_auto_complete(project_id: str):
     """Auto-complete project if every task is completed."""
     tasks = get_tasks_collection()
@@ -408,8 +559,8 @@ async def get_tasks(current_user: dict = Depends(get_current_user)):
     
     result = []
     async for task in cursor:
-        result.append(await populate_task(task))
-    return result
+        result.append(task)
+    return await populate_tasks_bulk(result)
 
 
 @router.get("/my")
@@ -428,8 +579,8 @@ async def get_my_tasks(current_user: dict = Depends(get_current_user)):
     
     result = []
     async for task in cursor:
-        result.append(await populate_task(task))
-    return result
+        result.append(task)
+    return await populate_tasks_bulk(result)
 
 
 @router.get("/project/{project_id}")
@@ -442,8 +593,8 @@ async def get_tasks_by_project(
     
     result = []
     async for task in cursor:
-        result.append(await populate_task(task))
-    return result
+        result.append(task)
+    return await populate_tasks_bulk(result)
 
 
 @router.get("/{task_id}")

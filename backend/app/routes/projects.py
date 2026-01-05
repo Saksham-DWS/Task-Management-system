@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, status, Depends
-from bson import ObjectId
 from datetime import datetime, timedelta, timezone
 from typing import List
+
+from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi import Body
+from bson import ObjectId
 
 from ..database import (
     get_projects_collection, 
@@ -67,6 +68,177 @@ def to_object_ids(id_list: list) -> list:
         except Exception:
             continue
     return object_ids
+
+def _normalize_project_dates(project: dict) -> None:
+    if project.get("endDate") and not project.get("end_date"):
+        project["end_date"] = project.get("endDate")
+    if project.get("startDate") and not project.get("start_date"):
+        project["start_date"] = project.get("startDate")
+    if project.get("end_date") and not project.get("endDate"):
+        project["endDate"] = project.get("end_date")
+    if project.get("start_date") and not project.get("startDate"):
+        project["startDate"] = project.get("start_date")
+
+def _parse_due_date(value):
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        if value.tzinfo:
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if parsed.tzinfo:
+                parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+            return parsed
+        except Exception:
+            return None
+    return None
+
+def _health_from_stats(stats: dict) -> int:
+    total = stats.get("total", 0)
+    if total == 0:
+        return 50
+    completed = stats.get("completed", 0)
+    blocked = stats.get("blocked", 0)
+    overdue = stats.get("overdue", 0)
+    completion_score = (completed / total) * 60
+    blocked_penalty = (blocked / total) * 20
+    overdue_penalty = (overdue / total) * 20
+    return int(max(0, min(100, 40 + completion_score - blocked_penalty - overdue_penalty)))
+
+async def _fetch_users_map(user_ids: set) -> dict:
+    if not user_ids:
+        return {}
+    users = get_users_collection()
+    object_ids = []
+    for uid in user_ids:
+        try:
+            object_ids.append(ObjectId(uid))
+        except Exception:
+            continue
+    if not object_ids:
+        return {}
+    cursor = users.find({"_id": {"$in": object_ids}}, {"password": 0})
+    user_map = {}
+    async for user in cursor:
+        user["_id"] = str(user["_id"])
+        user_map[user["_id"]] = user
+    return user_map
+
+async def _fetch_task_stats_and_members(project_ids: list) -> tuple[dict, dict]:
+    stats = {pid: {"total": 0, "completed": 0, "blocked": 0, "overdue": 0} for pid in project_ids}
+    task_members = {pid: set() for pid in project_ids}
+    if not project_ids:
+        return stats, task_members
+    tasks = get_tasks_collection()
+    variants = set(project_ids)
+    for pid in project_ids:
+        try:
+            variants.add(ObjectId(pid))
+        except Exception:
+            continue
+    cursor = tasks.find(
+        {"project_id": {"$in": list(variants)}},
+        {"project_id": 1, "status": 1, "due_date": 1, "assigned_by_id": 1, "assignee_ids": 1, "collaborator_ids": 1}
+    )
+    now = datetime.utcnow()
+    async for task in cursor:
+        pid = str(task.get("project_id"))
+        entry = stats.setdefault(pid, {"total": 0, "completed": 0, "blocked": 0, "overdue": 0})
+        entry["total"] += 1
+        status = task.get("status")
+        if status == "completed":
+            entry["completed"] += 1
+        if status == "blocked":
+            entry["blocked"] += 1
+        due_date = _parse_due_date(task.get("due_date"))
+        if due_date and status != "completed" and due_date < now:
+            entry["overdue"] += 1
+        members = task_members.setdefault(pid, set())
+        assigned_by_id = task.get("assigned_by_id")
+        if assigned_by_id:
+            members.add(str(assigned_by_id))
+        for aid in task.get("assignee_ids") or []:
+            members.add(str(aid))
+        for cid in task.get("collaborator_ids") or []:
+            members.add(str(cid))
+    return stats, task_members
+
+def _apply_project_members(project: dict, user_map: dict, extra_member_ids: set | None = None) -> None:
+    owner_id = str(project.get("owner_id") or "")
+    if owner_id and owner_id in user_map:
+        project["owner"] = user_map[owner_id]
+
+    access_user_ids = normalize_id_list(
+        project.get("access_user_ids")
+        or project.get("accessUserIds")
+        or []
+    )
+    collaborator_ids = normalize_id_list(
+        project.get("collaborator_ids")
+        or project.get("collaboratorIds")
+        or []
+    )
+
+    project["access_user_ids"] = access_user_ids
+    project["collaborator_ids"] = collaborator_ids
+    project["access_users"] = [user_map[uid] for uid in access_user_ids if uid in user_map]
+    project["collaborators"] = [user_map[uid] for uid in collaborator_ids if uid in user_map]
+
+    members = []
+    seen = set()
+    for user in [project.get("owner")] + project["access_users"] + project["collaborators"]:
+        if not user:
+            continue
+        uid = user.get("_id") or user.get("id")
+        if not uid or uid in seen:
+            continue
+        seen.add(uid)
+        members.append(user)
+    for uid in extra_member_ids or []:
+        if not uid or uid in seen:
+            continue
+        user = user_map.get(uid)
+        if not user:
+            continue
+        seen.add(uid)
+        members.append(user)
+    project["members"] = members
+
+async def populate_projects_bulk(projects: list) -> list:
+    if not projects:
+        return []
+    project_ids = []
+    user_ids = set()
+
+    for project in projects:
+        project_id = str(project["_id"])
+        project["_id"] = project_id
+        project_ids.append(project_id)
+        _normalize_project_dates(project)
+
+        owner_id = project.get("owner_id")
+        if owner_id:
+            user_ids.add(str(owner_id))
+        for cid in project.get("collaborator_ids") or project.get("collaboratorIds") or []:
+            user_ids.add(str(cid))
+        for uid in project.get("access_user_ids") or project.get("accessUserIds") or []:
+            user_ids.add(str(uid))
+
+    task_stats, task_members = await _fetch_task_stats_and_members(project_ids)
+    for member_ids in task_members.values():
+        user_ids.update(member_ids)
+    user_map = await _fetch_users_map(user_ids)
+
+    for project in projects:
+        extra_members = task_members.get(project["_id"], set())
+        _apply_project_members(project, user_map, extra_members)
+        stats = task_stats.get(project["_id"], {"total": 0, "completed": 0, "blocked": 0, "overdue": 0})
+        project["task_count"] = stats.get("total", 0)
+        project["health_score"] = _health_from_stats(stats)
+    return projects
 
 def has_group_access(current_user: dict, group_id: str) -> bool:
     role = current_user.get("role", "user")
@@ -354,8 +526,8 @@ async def get_projects(current_user: dict = Depends(get_current_user)):
     
     result = []
     async for project in cursor:
-        result.append(await populate_project(project))
-    return result
+        result.append(project)
+    return await populate_projects_bulk(result)
 
 
 @router.get("/group/{group_id}")
@@ -370,8 +542,8 @@ async def get_projects_by_group(
     
     result = []
     async for project in cursor:
-        result.append(await populate_project(project))
-    return result
+        result.append(project)
+    return await populate_projects_bulk(result)
 
 
 @router.get("/{project_id}")

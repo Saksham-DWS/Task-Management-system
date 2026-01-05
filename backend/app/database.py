@@ -1,3 +1,5 @@
+import asyncio
+
 from motor.motor_asyncio import AsyncIOMotorClient
 from .config import settings, _db_name_from_uri
 
@@ -13,6 +15,7 @@ async def connect_to_mongo():
     client = AsyncIOMotorClient(uri)
     db = client[db_name]
     print(f"Connected to MongoDB: {db_name}")
+    await ensure_indexes()
 
 
 async def close_mongo_connection():
@@ -24,6 +27,38 @@ async def close_mongo_connection():
 
 def get_database():
     return db
+
+
+async def ensure_indexes():
+    if db is None:
+        return
+    projects = db["projects"]
+    tasks = db["tasks"]
+    comments = db["comments"]
+    notifications = db["notifications"]
+
+    index_tasks = [
+        projects.create_index("group_id"),
+        projects.create_index("owner_id"),
+        projects.create_index("collaborator_ids"),
+        projects.create_index("access_user_ids"),
+        projects.create_index([("group_id", 1), ("status", 1)]),
+        tasks.create_index("project_id"),
+        tasks.create_index("group_id"),
+        tasks.create_index("assignee_ids"),
+        tasks.create_index("collaborator_ids"),
+        tasks.create_index("assigned_by_id"),
+        tasks.create_index([("project_id", 1), ("status", 1)]),
+        tasks.create_index("due_date"),
+        comments.create_index("task_id"),
+        comments.create_index("project_id"),
+        notifications.create_index([("user_id", 1), ("created_at", -1)]),
+    ]
+
+    results = await asyncio.gather(*index_tasks, return_exceptions=True)
+    for result in results:
+        if isinstance(result, Exception):
+            print(f"Index ensure warning: {result}")
 
 
 # Collection getters

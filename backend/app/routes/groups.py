@@ -9,6 +9,20 @@ from ..services.auth import get_current_user, require_role
 
 router = APIRouter(prefix="/api/groups", tags=["Groups"])
 
+async def get_project_counts_for_groups(group_ids: List[str]) -> dict:
+    if not group_ids:
+        return {}
+    projects = get_projects_collection()
+    pipeline = [
+        {"$addFields": {"group_id_str": {"$toString": "$group_id"}}},
+        {"$match": {"group_id_str": {"$in": group_ids}}},
+        {"$group": {"_id": "$group_id_str", "count": {"$sum": 1}}}
+    ]
+    counts = {}
+    async for row in projects.aggregate(pipeline):
+        counts[str(row["_id"])] = row.get("count", 0)
+    return counts
+
 def has_group_access(current_user: dict, group_id: str) -> bool:
     role = current_user.get("role", "user")
     if role in ["admin", "manager"]:
@@ -46,8 +60,19 @@ async def get_groups(current_user: dict = Depends(get_current_user)):
             return []
     
     result = []
+    group_list = []
     async for group in cursor:
-        result.append(await get_group_with_count(group))
+        group_list.append(group)
+
+    group_ids = [str(group["_id"]) for group in group_list]
+    counts = await get_project_counts_for_groups(group_ids)
+
+    for group in group_list:
+        group_id = str(group["_id"])
+        group["_id"] = group_id
+        group["project_count"] = counts.get(group_id, 0)
+        result.append(group)
+
     return result
 
 
