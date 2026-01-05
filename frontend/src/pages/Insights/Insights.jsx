@@ -436,6 +436,11 @@ export default function Insights() {
     return groups.filter((group) => groupIds.has(getGroupId(group)))
   }, [groups, filteredProjects])
 
+  const hasActiveFilters = useMemo(
+    () => filters.groupIds.length > 0 || filters.projectIds.length > 0 || filters.userIds.length > 0,
+    [filters.groupIds.length, filters.projectIds.length, filters.userIds.length]
+  )
+
   const kpi = useMemo(() => {
     const totalGroups = new Set(filteredProjects.map(getProjectGroupId)).size
     const totalProjects = filteredProjects.length
@@ -548,6 +553,10 @@ export default function Insights() {
     requestInsights(filtersRef.current)
   }
 
+  const handleClearFilters = () => {
+    updateFilters({ groupIds: [], projectIds: [], userIds: [] })
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -633,9 +642,19 @@ export default function Insights() {
       </div>
 
       <div className="card">
-        <div className="flex items-center gap-2 mb-4">
-          <Filter className="text-gray-500" size={18} />
-          <h3 className="font-semibold text-gray-900">Filters</h3>
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <div className="flex items-center gap-2">
+            <Filter className="text-gray-500" size={18} />
+            <h3 className="font-semibold text-gray-900">Filters</h3>
+          </div>
+          <button
+            type="button"
+            onClick={handleClearFilters}
+            disabled={!hasActiveFilters}
+            className="btn-secondary text-xs px-3 py-1 disabled:opacity-50"
+          >
+            Clear All
+          </button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <FilterMultiSelect

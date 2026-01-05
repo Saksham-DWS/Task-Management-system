@@ -427,3 +427,11 @@ with no AI hallucination and only give correct data insights
 
 
 I did'nt only mean show only those project that the user have access and groups but a comphrensive insights if he is access of any project as well have tasks in many project so insights of those tasks ,as well as show all projects and groups that he is involved in understand what i am saying previous one was good but the insights was not showing the comprehensive detailed insights , that i user selected how many project owner he is how much takss he is involved in and how many groups he is in and all each tasks and project level insights , understand
+
+As in our Ai insights panel insights are generating good but in 1st module of AI insights based on Groups or projects , generate all users insights who comes under choosen groups, or choosen project like example :
+if choose : only group generate group based insights with all data and also under users generate each user insights, or if choosen project generate all users insights with all thiere data AI insights who are involved 
+in the project weather a access person or a task doing person , understand what iam saying , system will give data accordingly to AI to generate AI insights : , ensure all users and groups and choosen project all over data 
+insgiths will generate ,
+for example : user 1 , user 2 , user 3 is in group generate group insights and those user groups insights wirh name under user that what contributions 
+they are doing and health etc, or if group 1 choosen and project 2 is choosen : and user 1 and user 3 is in project 2 generate all insights of that project and 
+those user insights too with there contribution to that project and the tasks if got task in that project or if have access of anything when project is choosen generate all project related insights 

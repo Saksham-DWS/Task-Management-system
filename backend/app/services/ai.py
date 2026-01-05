@@ -1838,19 +1838,28 @@ def _fallback_admin_filter_insights(context: Dict[str, Any]) -> Dict[str, Any]:
 
     user_insights = []
     for user in users:
-        if user.get("task_total", 0) == 0:
+        task_total = user.get("task_total", 0)
+        access_count = user.get("project_access_count", 0)
+        if task_total == 0 and access_count == 0:
             continue
+        access_names = user.get("project_access_names") or []
+        overview_lines = [
+            f"{task_total} task(s) assigned with {user.get('completion_rate')}% completion.",
+            f"Project access: {access_count} project(s)."
+        ]
+        if access_names:
+            overview_lines.append(f"Access projects: {', '.join([name for name in access_names if name])}.")
         user_insights.append({
             "user_id": user.get("user_id"),
             "name": user.get("name"),
-            "overview": [
-                f"{user.get('task_total')} task(s) assigned with {user.get('completion_rate')}% completion."
-            ],
+            "overview": overview_lines,
             "conclusions": [
-                f"{user.get('task_overdue')} overdue task(s) need follow up." if user.get("task_overdue") else "No overdue tasks detected."
+                f"{user.get('task_overdue')} overdue task(s) need follow up." if user.get("task_overdue") else "No overdue tasks detected.",
+                f"{task_total} task(s) tracked in the current filter scope."
             ],
             "recommendations": [
-                "Focus on closing high priority tasks and logging goal achievements."
+                "Focus on closing high priority tasks and logging goal achievements.",
+                "Share project updates regularly to improve visibility."
             ]
         })
 
@@ -2160,12 +2169,36 @@ async def generate_admin_filter_insights(
                 scoped_users.append(snapshot)
     else:
         user_ids_in_scope = set()
+        for project in scoped_projects:
+            owner_id = str(project.get("owner_id") or project.get("ownerId") or "")
+            if owner_id:
+                user_ids_in_scope.add(owner_id)
+            user_ids_in_scope.update(
+                _normalize_str_list(project.get("access_user_ids") or project.get("accessUserIds") or [])
+            )
+            user_ids_in_scope.update(
+                _normalize_str_list(project.get("collaborator_ids") or project.get("collaboratorIds") or [])
+            )
         for task in scoped_tasks:
             user_ids_in_scope.update(_normalize_str_list(task.get("assignee_ids") or []))
-        for uid in list(user_ids_in_scope)[:8]:
+            user_ids_in_scope.update(_normalize_str_list(task.get("collaborator_ids") or []))
+            assigned_by = str(task.get("assigned_by_id") or "")
+            if assigned_by:
+                user_ids_in_scope.add(assigned_by)
+
+        if not group_ids and not project_ids:
+            user_ids_in_scope = set(list(user_ids_in_scope)[:8])
+
+        for uid in user_ids_in_scope:
             user = user_map.get(uid)
             if user:
-                scoped_users.append(_build_user_snapshot(user, scoped_tasks, now))
+                snapshot = _build_user_snapshot(user, scoped_tasks, now)
+                access_projects = [
+                    p for p in scoped_projects if _project_involves_user(p, uid)
+                ]
+                snapshot["project_access_count"] = len(access_projects)
+                snapshot["project_access_names"] = [p.get("name", "") for p in access_projects][:5]
+                scoped_users.append(snapshot)
 
     user_focus_details = []
     if user_ids:
@@ -2223,6 +2256,7 @@ async def generate_admin_filter_insights(
         "If user_ids are provided, focus only on those users and do not mention other users. "
         "When user_focus is true, use user_focus_details to report counts for groups, projects, "
         "ownership, access, tasks, goals, and comment activity. "
+        "If group_ids or project_ids are provided and user_ids are empty, include user_insights for all users in context.users. "
         "Return JSON only with keys: overview, conclusions, recommendations, task_insights, user_insights. "
         "Each section should have bullets arrays; overview should include a short summary. "
         "task_insights should include a short summary and bullet list of task status and goal progress. "
@@ -2239,6 +2273,8 @@ async def generate_admin_filter_insights(
         "For projects where user_project_access is false, avoid project-level leadership commentary and focus on task work. "
         "When user_focus is true, include per-user counts from user_focus_details and highlight up to 3 recent tasks "
         "and 3 projects from task_details/projects. "
+        "When user_focus is false but group/project filters exist, list user insights for each user in context.users "
+        "including project_access_count and task completion where available. "
         "Always include task_insights with a summary and 4-8 bullets."
         f"\n\nContext:\n{json.dumps(context, ensure_ascii=True)}"
     )
