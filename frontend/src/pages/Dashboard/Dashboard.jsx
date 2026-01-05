@@ -5,6 +5,7 @@ import { useAuthStore } from '../../store/auth.store'
 import { useAccess } from '../../hooks/useAccess'
 import { taskService } from '../../services/task.service'
 import { projectService } from '../../services/project.service'
+import { groupService } from '../../services/group.service'
 import AISummary from '../../components/AI/AISummary'
 import { isOverdue, formatDate } from '../../utils/helpers'
 import { TASK_STATUS_LABELS, TASK_STATUS_COLORS } from '../../utils/constants'
@@ -12,7 +13,7 @@ import { TASK_STATUS_LABELS, TASK_STATUS_COLORS } from '../../utils/constants'
 export default function Dashboard() {
   const navigate = useNavigate()
   const { user } = useAuthStore()
-  const { isManager } = useAccess()
+  const { isManager, userAccess } = useAccess()
   const [recentProjects, setRecentProjects] = useState([])
   const [myTasks, setMyTasks] = useState([])
   const [loading, setLoading] = useState(true)
@@ -25,12 +26,71 @@ export default function Dashboard() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [projectsData, tasksData] = await Promise.all([
+      const [projectsData, tasksData, groupsData] = await Promise.all([
         projectService.getAll(),
-        taskService.getMyTasks()
+        taskService.getMyTasks(),
+        groupService.getAll()
       ])
-      // Get recent 5 projects
-      setRecentProjects(projectsData.slice(0, 5))
+      const groupMap = new Map()
+      ;(groupsData || []).forEach((group) => {
+        const groupId = group?._id || group?.id
+        if (groupId) {
+          groupMap.set(String(groupId), group)
+        }
+      })
+
+      const getProjectGroupId = (project) =>
+        project?.group_id || project?.groupId || project?.group?._id || project?.group?.id
+
+      const projectsWithGroup = (projectsData || []).map((project) => {
+        const groupId = getProjectGroupId(project)
+        const group = groupId ? groupMap.get(String(groupId)) : null
+        if (project.group || !group) {
+          return project
+        }
+        return { ...project, group }
+      })
+
+      const accessProjectIds = new Set(
+        (userAccess?.projectIds || userAccess?.project_ids || []).map((id) => String(id))
+      )
+      const accessGroupIds = new Set(
+        (userAccess?.groupIds || userAccess?.group_ids || []).map((id) => String(id))
+      )
+      const taskProjectIds = new Set(
+        (tasksData || []).map((task) =>
+          String(task?.project_id || task?.projectId || task?.project?._id || task?.project?.id || '')
+        )
+      )
+
+      let scopedProjects = projectsWithGroup
+      if (!isManager()) {
+        scopedProjects = projectsWithGroup.filter((project) => {
+          const projectId = String(project?._id || project?.id || '')
+          const groupId = String(getProjectGroupId(project) || '')
+          return (
+            (projectId && accessProjectIds.has(projectId)) ||
+            (groupId && accessGroupIds.has(groupId)) ||
+            (projectId && taskProjectIds.has(projectId))
+          )
+        })
+      }
+
+      const getProjectDate = (project) => {
+        const dateValue =
+          project?.updated_at ||
+          project?.updatedAt ||
+          project?.created_at ||
+          project?.createdAt ||
+          project?.start_date ||
+          project?.startDate
+        if (!dateValue) return 0
+        const parsed = new Date(dateValue)
+        return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime()
+      }
+
+      const recent = [...scopedProjects].sort((a, b) => getProjectDate(b) - getProjectDate(a))
+      setRecentProjects(recent.slice(0, 5))
       setMyTasks(tasksData)
       generateInsights(tasksData)
     } catch (error) {
