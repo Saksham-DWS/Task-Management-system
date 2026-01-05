@@ -31,7 +31,16 @@ export const useAuth = () => {
       if (err.response?.status === 401) {
         setError('Incorrect login credentials. Please check your credentials again or reset the password with the admin.')
       } else {
-        setError(err.response?.data?.detail || 'Login failed')
+        const detail = err.response?.data?.detail
+        if (Array.isArray(detail)) {
+          const messages = detail
+            .map((item) => item?.msg)
+            .filter(Boolean)
+            .join(' ')
+          setError(messages || 'Login failed')
+        } else {
+          setError(detail || 'Login failed')
+        }
       }
       throw err
     } finally {
