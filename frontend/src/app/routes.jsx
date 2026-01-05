@@ -15,6 +15,7 @@ import Insights from '../pages/Insights/Insights'
 import Reports from '../pages/Reports/Reports'
 import Settings from '../pages/Settings/Settings'
 import Notifications from '../pages/Notifications/Notifications'
+import ManagerRoute from './ManagerRoute'
 
 export default function AppRoutes() {
   return (
@@ -30,7 +31,7 @@ export default function AppRoutes() {
       <Route path="/tasks/:id" element={<ProtectedRoute><TaskDetail /></ProtectedRoute>} />
       <Route path="/my-work" element={<ProtectedRoute><MyWork /></ProtectedRoute>} />
       <Route path="/teams" element={<ProtectedRoute><TeamsAccess /></ProtectedRoute>} />
-      <Route path="/insights" element={<ProtectedRoute><Insights /></ProtectedRoute>} />
+      <Route path="/insights" element={<ManagerRoute><Insights /></ManagerRoute>} />
       <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
       <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />

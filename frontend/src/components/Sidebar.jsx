@@ -40,7 +40,7 @@ export default function Sidebar() {
     { path: '/my-work', icon: ListTodo, label: 'My Work', show: true },
     { path: '/notifications', icon: Bell, label: 'Notifications', show: true },
     { path: '/teams', icon: Users, label: 'Teams & Access', requiresManager: true, show: true },
-    { path: '/insights', icon: LineChart, label: 'Insights', show: true },
+    { path: '/insights', icon: LineChart, label: 'Insights', show: isManager() },
     { path: '/reports', icon: FileBarChart, label: 'Reports', show: true },
     { path: '/settings', icon: Settings, label: 'Settings', show: true }
   ].filter((item) => item.show !== false)

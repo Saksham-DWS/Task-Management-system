@@ -235,13 +235,15 @@ export default function Dashboard() {
         </div>
 
         {/* Sidebar - AI Insights */}
-        <div>
-          <AISummary 
-            title="AI Insights"
-            insights={insights}
-            onRefresh={loadData}
-          />
-        </div>
+        {isManager() && (
+          <div>
+            <AISummary 
+              title="AI Insights"
+              insights={insights}
+              onRefresh={loadData}
+            />
+          </div>
+        )}
       </div>
     </div>
   )
