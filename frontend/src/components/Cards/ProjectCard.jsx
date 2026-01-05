@@ -51,7 +51,7 @@ export default function ProjectCard({ project, canEdit = false, onEdit }) {
             <Briefcase className="text-blue-600" size={20} />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">{project.name}</h3>
+            <h3 className="font-semibold text-gray-900 dark:text-white">{project.name}</h3>
             <span className={`inline-block px-2 py-0.5 text-xs rounded-full ${statusClass}`}>
               {statusLabel}
             </span>
@@ -66,7 +66,7 @@ export default function ProjectCard({ project, canEdit = false, onEdit }) {
                 event.stopPropagation()
                 onEdit?.(project)
               }}
-              className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
               title="Edit project"
             >
               <Settings size={16} />
@@ -77,13 +77,13 @@ export default function ProjectCard({ project, canEdit = false, onEdit }) {
 
       {/* Description */}
       {project.description && (
-        <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+        <p className="text-sm text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">
           {project.description}
         </p>
       )}
 
       {/* Stats */}
-      <div className="flex items-center gap-4 text-sm text-gray-600 mb-4">
+      <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-300 mb-4">
         <div className="flex items-center gap-1">
           <Calendar size={14} />
           <span>{formatDate(deadline) || 'No deadline'}</span>
@@ -98,7 +98,7 @@ export default function ProjectCard({ project, canEdit = false, onEdit }) {
       <div className="pt-4 border-t border-gray-100">
         <div className="flex items-center gap-2 mb-2">
           <Users size={14} className="text-gray-400" />
-          <span className="text-sm text-gray-600">Members</span>
+          <span className="text-sm text-gray-600 dark:text-gray-400">Members</span>
         </div>
         {memberCount > 0 ? (
           <div className="flex flex-wrap gap-2">
@@ -112,18 +112,18 @@ export default function ProjectCard({ project, canEdit = false, onEdit }) {
               </span>
             ))}
             {memberCount > 8 && (
-              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-600">
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
                 +{memberCount - 8}
               </span>
             )}
             {memberCount === 0 && accessUserIds.length > 0 && (
-              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-600">
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
                 {accessUserIds.length} access user(s)
               </span>
             )}
           </div>
         ) : (
-          <span className="text-sm text-gray-500">No members assigned</span>
+          <span className="text-sm text-gray-500 dark:text-gray-400">No members assigned</span>
         )}
       </div>
     </div>

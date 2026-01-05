@@ -184,8 +184,8 @@ export default function Groups() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Groups</h1>
-          <p className="text-gray-500 mt-1">Organize your projects by business areas</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Groups</h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">Organize your projects by business areas</p>
         </div>
         {isManager() && (
           <button 
@@ -200,13 +200,13 @@ export default function Groups() {
 
       {/* Search */}
       <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={20} />
         <input
           type="text"
           placeholder="Search groups..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          className="w-full pl-10 pr-4 py-2 bg-white dark:bg-[#111111] border border-gray-200 dark:border-gray-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:text-white dark:placeholder-gray-500"
         />
       </div>
 
@@ -226,7 +226,7 @@ export default function Groups() {
         <div className="card text-center py-16">
           {searchQuery ? (
             <>
-              <p className="text-gray-500 mb-2">No groups match your search</p>
+              <p className="text-gray-500 dark:text-gray-400 mb-2">No groups match your search</p>
               <button 
                 onClick={() => setSearchQuery('')}
                 className="text-primary-600 hover:text-primary-700 text-sm font-medium"
@@ -236,7 +236,7 @@ export default function Groups() {
             </>
           ) : (
             <>
-              <p className="text-gray-500 mb-4">No groups yet. Create your first group to get started.</p>
+              <p className="text-gray-500 dark:text-gray-400 mb-4">No groups yet. Create your first group to get started.</p>
               {isManager() && (
                 <button 
                   onClick={() => openModal('newGroup')}

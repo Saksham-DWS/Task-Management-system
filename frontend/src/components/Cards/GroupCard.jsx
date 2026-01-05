@@ -37,8 +37,8 @@ export default function GroupCard({ group, onEdit, canEdit = false }) {
             <FolderKanban className="text-primary-600" size={20} />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">{group.name}</h3>
-            <p className="text-sm text-gray-500">{group.projectCount || 0} projects</p>
+            <h3 className="font-semibold text-gray-900 dark:text-white">{group.name}</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">{group.projectCount || 0} projects</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -50,7 +50,7 @@ export default function GroupCard({ group, onEdit, canEdit = false }) {
                 event.stopPropagation()
                 onEdit?.(group)
               }}
-              className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
               title="Edit group"
             >
               <Settings size={16} />
@@ -61,7 +61,7 @@ export default function GroupCard({ group, onEdit, canEdit = false }) {
 
       {/* Description */}
       {group.description && (
-        <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+        <p className="text-sm text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">
           {group.description}
         </p>
       )}
@@ -70,7 +70,7 @@ export default function GroupCard({ group, onEdit, canEdit = false }) {
       <div className="pt-4 border-t border-gray-100">
         <div className="flex items-center gap-2 mb-2">
           <Users size={14} className="text-gray-400" />
-          <span className="text-sm text-gray-600">Access</span>
+          <span className="text-sm text-gray-600 dark:text-gray-400">Access</span>
         </div>
         {accessInitials.length > 0 ? (
           <div className="flex flex-wrap gap-2">
@@ -85,7 +85,7 @@ export default function GroupCard({ group, onEdit, canEdit = false }) {
             ))}
           </div>
         ) : (
-          <span className="text-sm text-gray-500">No access assigned</span>
+          <span className="text-sm text-gray-500 dark:text-gray-400">No access assigned</span>
         )}
         {group.isRestricted && (
           <Lock size={14} className="text-gray-400" />

@@ -167,6 +167,31 @@
   .progress-fill {
     @apply h-full rounded-full transition-all duration-500;
   }
+
+  /* Dark mode text harmonization */
+  .dark .text-gray-900 {
+    color: rgb(243 244 246);
+  }
+
+  .dark .text-gray-800 {
+    color: rgb(243 244 246);
+  }
+
+  .dark .text-gray-700 {
+    color: rgb(229 231 235);
+  }
+
+  .dark .text-gray-600 {
+    color: rgb(209 213 219);
+  }
+
+  .dark .text-gray-500 {
+    color: rgb(156 163 175);
+  }
+
+  .dark .text-gray-400 {
+    color: rgb(156 163 175);
+  }
 }
 
 /* Scrollbar Styling */
