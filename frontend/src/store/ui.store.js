@@ -3,35 +3,14 @@ import { persist } from 'zustand/middleware'
 
 export const useUIStore = create(
   persist(
-    (set, get) => ({
+    (set) => ({
       sidebarOpen: true,
-      darkMode: false,
       activeModal: null,
       modalData: null,
       loading: false,
       notification: null,
 
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
-      
-      toggleDarkMode: () => {
-        const newDarkMode = !get().darkMode
-        // Apply dark mode to document
-        if (newDarkMode) {
-          document.documentElement.classList.add('dark')
-        } else {
-          document.documentElement.classList.remove('dark')
-        }
-        set({ darkMode: newDarkMode })
-      },
-
-      setDarkMode: (darkMode) => {
-        if (darkMode) {
-          document.documentElement.classList.add('dark')
-        } else {
-          document.documentElement.classList.remove('dark')
-        }
-        set({ darkMode })
-      },
       
       openModal: (modalName, data = null) => set({
         activeModal: modalName,
@@ -58,15 +37,8 @@ export const useUIStore = create(
     {
       name: 'dws-ui-storage',
       partialize: (state) => ({ 
-        sidebarOpen: state.sidebarOpen,
-        darkMode: state.darkMode 
-      }),
-      onRehydrateStorage: () => (state) => {
-        // Apply dark mode on page load
-        if (state?.darkMode) {
-          document.documentElement.classList.add('dark')
-        }
-      }
+        sidebarOpen: state.sidebarOpen
+      })
     }
   )
 )

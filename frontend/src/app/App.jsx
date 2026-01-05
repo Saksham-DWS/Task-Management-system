@@ -4,20 +4,12 @@ import AppRoutes from './routes'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import { useAuthStore } from '../store/auth.store'
-import { useUIStore } from '../store/ui.store'
 
 function App() {
   const { user, isAuthenticated } = useAuthStore()
-  const { darkMode } = useUIStore()
-
-  // Apply dark mode class on mount and changes
   useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-    }
-  }, [darkMode])
+    document.documentElement.classList.remove('dark')
+  }, [])
 
   if (!isAuthenticated) {
     return (
@@ -29,7 +21,7 @@ function App() {
 
   return (
     <BrowserRouter>
-      <div className="flex h-screen bg-gray-50 dark:bg-[#0a0a0a] transition-colors">
+      <div className="flex h-screen bg-gray-50 transition-colors">
         <Sidebar />
         <div className="flex-1 flex flex-col overflow-hidden">
           <Header />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { User, Bell, Shield, Palette, Save, Sun, Moon } from 'lucide-react'
+import { User, Bell, Shield, Save } from 'lucide-react'
 import { useAuthStore } from '../../store/auth.store'
 import { useUIStore } from '../../store/ui.store'
 import { getInitials, getAvatarColor } from '../../utils/helpers'
@@ -8,7 +8,7 @@ import { notificationService } from '../../services/notification.service'
 
 export default function Settings() {
   const { user, updateUser } = useAuthStore()
-  const { darkMode, toggleDarkMode, sidebarOpen, toggleSidebar } = useUIStore()
+  const { sidebarOpen, toggleSidebar } = useUIStore()
   const [activeTab, setActiveTab] = useState('profile')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState(null)
@@ -134,8 +134,7 @@ export default function Settings() {
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'notifications', label: 'Notifications', icon: Bell },
-    { id: 'security', label: 'Security', icon: Shield },
-    { id: 'appearance', label: 'Appearance', icon: Palette }
+    { id: 'security', label: 'Security', icon: Shield }
   ]
 
   return (
@@ -313,39 +312,6 @@ export default function Settings() {
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">Appearance</h2>
               
               <div className="space-y-6">
-                {/* Theme Toggle */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Theme</label>
-                  <div className="flex gap-4">
-                    <button 
-                      onClick={() => darkMode && toggleDarkMode()}
-                      className={`flex-1 p-4 border-2 rounded-xl transition-all ${
-                        !darkMode 
-                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
-                          : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300'
-                      }`}
-                    >
-                      <div className="w-full h-20 bg-gray-100 rounded-lg mb-3 flex items-center justify-center">
-                        <Sun size={32} className="text-amber-500" />
-                      </div>
-                      <p className="text-sm font-medium text-center text-gray-900 dark:text-white">Light</p>
-                    </button>
-                    <button 
-                      onClick={() => !darkMode && toggleDarkMode()}
-                      className={`flex-1 p-4 border-2 rounded-xl transition-all ${
-                        darkMode 
-                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
-                          : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300'
-                      }`}
-                    >
-                      <div className="w-full h-20 bg-gray-800 rounded-lg mb-3 flex items-center justify-center">
-                        <Moon size={32} className="text-blue-400" />
-                      </div>
-                      <p className="text-sm font-medium text-center text-gray-900 dark:text-white">Dark</p>
-                    </button>
-                  </div>
-                </div>
-
                 {/* Sidebar Toggle */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Sidebar</label>
