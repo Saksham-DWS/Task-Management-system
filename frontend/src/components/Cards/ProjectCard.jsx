@@ -1,16 +1,11 @@
 import { useNavigate } from 'react-router-dom'
 import { Briefcase, Users, Calendar, Settings } from 'lucide-react'
-import { getInitials, getAvatarColor, formatDate, calculateProgress } from '../../utils/helpers'
+import { getInitials, getAvatarColor, formatDate } from '../../utils/helpers'
 import { PROJECT_STATUS_COLORS, PROJECT_STATUS_LABELS, AI_HEALTH_COLORS } from '../../utils/constants'
 
 export default function ProjectCard({ project, canEdit = false, onEdit }) {
   const navigate = useNavigate()
   
-  const progress = calculateProgress(
-    project.weeklyAchievements?.length || 0,
-    project.weeklyGoals?.length || 0
-  )
-
   const statusClass = PROJECT_STATUS_COLORS[project.status] || 'bg-gray-100 text-gray-700'
   const statusLabel = PROJECT_STATUS_LABELS[project.status] || project.status
   const deadline = project.endDate || project.end_date || project.dueDate || project.due_date
@@ -86,20 +81,6 @@ export default function ProjectCard({ project, canEdit = false, onEdit }) {
           {project.description}
         </p>
       )}
-
-      {/* Progress */}
-      <div className="mb-4">
-        <div className="flex items-center justify-between text-sm mb-1">
-          <span className="text-gray-600">Goals Progress</span>
-          <span className="font-medium text-gray-900">{progress}%</span>
-        </div>
-        <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-blue-600 rounded-full transition-all"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </div>
 
       {/* Stats */}
       <div className="flex items-center gap-4 text-sm text-gray-600 mb-4">

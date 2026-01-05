@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { FolderKanban, Users, Lock, Settings } from 'lucide-react'
-import { getInitials, getAvatarColor, calculateProgress } from '../../utils/helpers'
+import { getInitials, getAvatarColor } from '../../utils/helpers'
 import { AI_HEALTH_COLORS } from '../../utils/constants'
 
 export default function GroupCard({ group, onEdit, canEdit = false }) {
@@ -10,11 +10,6 @@ export default function GroupCard({ group, onEdit, canEdit = false }) {
     .map((user) => getInitials(user.name))
     .filter((initials) => initials && initials !== '?')
   
-  const progress = calculateProgress(
-    group.weeklyAchievements?.length || 0,
-    group.weeklyGoals?.length || 0
-  )
-
   const getHealthBadge = () => {
     if (!group.healthStatus) return null
     const colorClass = AI_HEALTH_COLORS[group.healthStatus] || 'text-gray-600'
@@ -70,20 +65,6 @@ export default function GroupCard({ group, onEdit, canEdit = false }) {
           {group.description}
         </p>
       )}
-
-      {/* Progress */}
-      <div className="mb-4">
-        <div className="flex items-center justify-between text-sm mb-1">
-          <span className="text-gray-600">Goals Progress</span>
-          <span className="font-medium text-gray-900">{progress}%</span>
-        </div>
-        <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-primary-600 rounded-full transition-all"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </div>
 
       {/* Footer */}
       <div className="pt-4 border-t border-gray-100">
