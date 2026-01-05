@@ -266,6 +266,111 @@ async def analyze_goals_vs_achievements(goals: List[Dict], achievements: List[Di
     }
 
 
+def _build_user_focus_details(
+    user: Dict[str, Any],
+    open_projects: List[Dict[str, Any]],
+    tasks: List[Dict[str, Any]],
+    tasks_by_project: Dict[str, List[Dict[str, Any]]],
+    comments: List[Dict[str, Any]],
+    now: datetime
+) -> Dict[str, Any]:
+    uid = str(user.get("_id") or user.get("id") or "")
+    user_tasks = [task for task in tasks if _task_involves_user(task, uid)]
+    user_project_ids = set()
+    for task in user_tasks:
+        pid = _task_project_id(task)
+        if pid:
+            user_project_ids.add(pid)
+    for project in open_projects:
+        if _project_involves_user(project, uid):
+            user_project_ids.add(_project_id(project))
+    user_projects = [p for p in open_projects if _project_id(p) in user_project_ids]
+    group_ids = {_project_group_id(p) for p in user_projects if _project_group_id(p)}
+
+    owner_projects = [p for p in user_projects if str(p.get("owner_id")) == uid]
+    access_projects = [
+        p for p in user_projects
+        if uid in _normalize_str_list(p.get("access_user_ids") or p.get("accessUserIds") or [])
+    ]
+    collaborator_projects = [
+        p for p in user_projects
+        if uid in _normalize_str_list(p.get("collaborator_ids") or [])
+    ]
+
+    task_total = len(user_tasks)
+    task_completed = len([t for t in user_tasks if t.get("status") == "completed"])
+    task_overdue = len([
+        t for t in user_tasks
+        if _task_due_date(t) and _task_due_date(t) < now and t.get("status") != "completed"
+    ])
+    task_on_hold = len([t for t in user_tasks if t.get("status") in ["hold", "on_hold", "blocked"]])
+    task_goals_total = 0
+    task_goals_achieved = 0
+    achievements_count = 0
+    for task in user_tasks:
+        stats = _task_goal_stats(task)
+        task_goals_total += stats.get("goals_total", 0)
+        task_goals_achieved += stats.get("goals_achieved", 0)
+        achievements_count += stats.get("achievements_count", 0)
+
+    project_goals_total = 0
+    project_goals_matched = 0
+    for project in user_projects:
+        stats = _project_goal_stats(project)
+        project_goals_total += stats.get("total", 0)
+        project_goals_matched += stats.get("matched", 0)
+
+    task_comment_count = 0
+    project_comment_count = 0
+    for comment in comments:
+        if str(comment.get("user_id") or "") != uid:
+            continue
+        if comment.get("task_id") or comment.get("taskId"):
+            task_comment_count += 1
+        if comment.get("project_id") or comment.get("projectId"):
+            project_comment_count += 1
+
+    recent_tasks = []
+    for task in sorted(
+        user_tasks,
+        key=lambda t: _parse_datetime(t.get("updated_at") or t.get("created_at")) or datetime.min,
+        reverse=True
+    )[:5]:
+        stats = _task_goal_stats(task)
+        recent_tasks.append({
+            "task_id": str(task.get("_id") or ""),
+            "title": task.get("title") or "",
+            "status": task.get("status") or "",
+            "priority": task.get("priority") or "",
+            "due_date": _to_iso_z(task.get("due_date")),
+            "goals_total": stats.get("goals_total", 0),
+            "goals_achieved": stats.get("goals_achieved", 0),
+            "achievements_count": stats.get("achievements_count", 0)
+        })
+
+    return {
+        "user_id": uid,
+        "name": user.get("name") or "User",
+        "group_count": len(group_ids),
+        "project_count": len(user_projects),
+        "project_owner_count": len(owner_projects),
+        "project_access_count": len(access_projects),
+        "project_collaborator_count": len(collaborator_projects),
+        "task_total": task_total,
+        "task_completed": task_completed,
+        "task_overdue": task_overdue,
+        "task_on_hold": task_on_hold,
+        "task_goals_total": task_goals_total,
+        "task_goals_achieved": task_goals_achieved,
+        "task_achievements_count": achievements_count,
+        "project_goals_total": project_goals_total,
+        "project_goals_matched": project_goals_matched,
+        "task_comment_count": task_comment_count,
+        "project_comment_count": project_comment_count,
+        "recent_tasks": recent_tasks
+    }
+
+
 async def generate_team_insights(users: List[Dict], tasks: List[Dict]) -> List[Dict]:
     """Generate insights about team workload and performance"""
     insights = []
@@ -1478,10 +1583,77 @@ def _sort_projects_recent(projects: List[Dict[str, Any]]) -> List[Dict[str, Any]
     return sorted(projects, key=_key, reverse=True)
 
 
+def _recent_activity_entries(
+    activity: Any,
+    user_ids: List[str] | None = None,
+    limit: int = 3
+) -> List[Dict[str, Any]]:
+    if not isinstance(activity, list):
+        return []
+    normalized = []
+    for entry in activity:
+        if not isinstance(entry, dict):
+            continue
+        if user_ids:
+            entry_user = str(entry.get("user_id") or "")
+            if entry_user and entry_user not in user_ids:
+                continue
+        timestamp = _to_iso_z(entry.get("timestamp") or entry.get("time") or entry.get("date"))
+        normalized.append({
+            "description": entry.get("description") or "",
+            "timestamp": timestamp
+        })
+    normalized.sort(
+        key=lambda item: _parse_datetime(item.get("timestamp")) or datetime.min,
+        reverse=True
+    )
+    return normalized[:limit]
+
+
+def _build_task_snapshot(
+    task: Dict[str, Any],
+    now: datetime,
+    user_ids: List[str] | None = None,
+    task_comment_counts: Dict[str, int] | None = None,
+    task_comment_selected_counts: Dict[str, int] | None = None,
+    project_lookup: Dict[str, Dict[str, Any]] | None = None
+) -> Dict[str, Any]:
+    task_id = str(task.get("_id") or "")
+    task_stats = _task_goal_stats(task)
+    project_id = _task_project_id(task)
+    project = project_lookup.get(project_id) if project_lookup else None
+    overdue = bool(_task_due_date(task) and _task_due_date(task) < now and task.get("status") != "completed")
+    total_comments = (task_comment_counts or {}).get(task_id, 0)
+    selected_comments = (task_comment_selected_counts or {}).get(task_id, 0)
+    if user_ids:
+        total_comments = selected_comments
+    return {
+        "task_id": task_id,
+        "title": task.get("title") or "",
+        "status": task.get("status") or "",
+        "priority": task.get("priority") or "",
+        "due_date": _to_iso_z(task.get("due_date")),
+        "assigned_date": _to_iso_z(task.get("assigned_date")),
+        "overdue": overdue,
+        "project_id": project_id,
+        "project_name": project.get("name") if project else None,
+        "group_id": str(task.get("group_id") or ""),
+        "goals_total": task_stats.get("goals_total", 0),
+        "goals_achieved": task_stats.get("goals_achieved", 0),
+        "achievements_count": task_stats.get("achievements_count", 0),
+        "comments_total": total_comments,
+        "comments_by_selected_users": selected_comments,
+        "activity_recent": _recent_activity_entries(task.get("activity"), user_ids=user_ids)
+    }
+
+
 def _build_project_snapshot(
     project: Dict[str, Any],
     project_tasks: List[Dict[str, Any]],
-    now: datetime
+    now: datetime,
+    user_ids: List[str] | None = None,
+    project_comment_counts: Dict[str, int] | None = None,
+    project_comment_selected_counts: Dict[str, int] | None = None
 ) -> Dict[str, Any]:
     total_tasks = len(project_tasks)
     completed_tasks = len([t for t in project_tasks if t.get("status") == "completed"])
@@ -1496,6 +1668,8 @@ def _build_project_snapshot(
     task_goals_achieved = 0
     goal_window_total = 0
     goal_window_met = 0
+    user_task_count = 0
+    user_task_completed = 0
     for task in project_tasks:
         task_stats = _task_goal_stats(task)
         task_goals_total += task_stats.get("goals_total", 0)
@@ -1508,10 +1682,24 @@ def _build_project_snapshot(
                 goal_window_total += 1
                 if task_stats.get("goals_total") and task_stats.get("goals_achieved") >= task_stats.get("goals_total"):
                     goal_window_met += 1
+        if user_ids and any(_task_involves_user(task, uid) for uid in user_ids):
+            user_task_count += 1
+            if task.get("status") == "completed":
+                user_task_completed += 1
     completion_rate = int((completed_tasks / total_tasks) * 100) if total_tasks else 0
+    project_id = _project_id(project)
+    access_users = []
+    if user_ids:
+        access_users = [uid for uid in user_ids if _project_involves_user(project, uid)]
+        members = access_users
+    total_comments = (project_comment_counts or {}).get(project_id, 0)
+    selected_comments = (project_comment_selected_counts or {}).get(project_id, 0)
+    if user_ids:
+        total_comments = selected_comments
     return {
-        "project_id": _project_id(project),
+        "project_id": project_id,
         "name": project.get("name") or "Project",
+        "description": project.get("description") or "",
         "group_id": _project_group_id(project),
         "status": project.get("status"),
         "status_label": _project_status_label(project.get("status")),
@@ -1523,10 +1711,18 @@ def _build_project_snapshot(
         "member_count": len(members),
         "project_goals_total": project_goals.get("total", 0),
         "project_goals_matched": project_goals.get("matched", 0),
+        "project_goals_recent": project_goals.get("recent_goals", []),
         "task_goals_total": task_goals_total,
         "task_goals_achieved": task_goals_achieved,
         "goal_window_total": goal_window_total,
         "goal_window_met": goal_window_met,
+        "user_project_access": bool(access_users),
+        "user_access_ids": access_users,
+        "user_task_total": user_task_count if user_ids else None,
+        "user_task_completed": user_task_completed if user_ids else None,
+        "comments_total": total_comments,
+        "comments_by_selected_users": selected_comments,
+        "activity_recent": _recent_activity_entries(project.get("activity"), user_ids=user_ids),
         "end_date": _to_iso_z(project.get("end_date") or project.get("endDate")),
         "created_at": _to_iso_z(project.get("created_at") or project.get("createdAt"))
     }
@@ -1569,6 +1765,7 @@ def _fallback_admin_filter_insights(context: Dict[str, Any]) -> Dict[str, Any]:
     projects = context.get("projects", [])
     top_projects = context.get("top_projects", [])
     users = context.get("users", [])
+    tasks = context.get("task_details", [])
 
     total_projects = totals.get("projects", 0)
     total_groups = totals.get("groups", 0)
@@ -1625,6 +1822,20 @@ def _fallback_admin_filter_insights(context: Dict[str, Any]) -> Dict[str, Any]:
     recommendations_bullets.append("Close review-stage work to raise completion momentum.")
     recommendations_bullets.append("Keep weekly goals short and track achievements after the 7-day window.")
 
+    task_summary = (
+        f"{total_tasks} task(s) in scope with {completion_rate}% completion and "
+        f"{overdue_tasks} overdue task(s)."
+    )
+    task_bullets = []
+    for task in tasks[:8]:
+        task_bullets.append(
+            f"Task **{task.get('title','Task')}**: {task.get('status')}, "
+            f"priority {task.get('priority') or 'normal'}, "
+            f"{task.get('goals_achieved', 0)}/{task.get('goals_total', 0)} goals achieved."
+        )
+    if not task_bullets:
+        task_bullets.append("No task details are available for the current filter scope.")
+
     user_insights = []
     for user in users:
         if user.get("task_total", 0) == 0:
@@ -1647,6 +1858,154 @@ def _fallback_admin_filter_insights(context: Dict[str, Any]) -> Dict[str, Any]:
         "overview": {"summary": overview_summary, "bullets": overview_bullets},
         "conclusions": {"bullets": conclusions_bullets},
         "recommendations": {"bullets": recommendations_bullets},
+        "task_insights": {"summary": task_summary, "bullets": task_bullets},
+        "user_insights": user_insights,
+        "source": "fallback"
+    }
+
+
+def _fallback_user_focus_insights(context: Dict[str, Any]) -> Dict[str, Any]:
+    user_details = context.get("user_focus_details") or []
+    projects = context.get("projects", [])
+    tasks = context.get("task_details", [])
+    totals = context.get("totals", {})
+
+    total_projects = totals.get("projects", 0)
+    total_groups = totals.get("groups", 0)
+    total_tasks = totals.get("tasks", 0)
+    completed_tasks = totals.get("tasks_completed", 0)
+    overdue_tasks = totals.get("tasks_overdue", 0)
+    completion_rate = int((completed_tasks / total_tasks) * 100) if total_tasks else 0
+
+    user_names = ", ".join([u.get("name") for u in user_details if u.get("name")]) or "selected user(s)"
+    overview_summary = (
+        f"Insights focus on {user_names} across {total_groups} group(s) and {total_projects} project(s). "
+        f"{total_tasks} task(s) are in scope with {completion_rate}% completion and {overdue_tasks} overdue task(s). "
+        "Project ownership, task goals, and comment activity are summarized below."
+    )
+
+    overview_bullets = []
+    for detail in user_details:
+        overview_bullets.append(
+            f"**{detail.get('name','User')}**: {detail.get('group_count', 0)} groups, "
+            f"{detail.get('project_count', 0)} projects "
+            f"({detail.get('project_owner_count', 0)} owned, {detail.get('project_access_count', 0)} access), "
+            f"{detail.get('task_total', 0)} tasks "
+            f"({detail.get('task_completed', 0)} completed, {detail.get('task_overdue', 0)} overdue)."
+        )
+        overview_bullets.append(
+            f"Task goals achieved: {detail.get('task_goals_achieved', 0)}/{detail.get('task_goals_total', 0)} "
+            f"with {detail.get('task_achievements_count', 0)} achievement log(s). "
+            f"Project goals matched: {detail.get('project_goals_matched', 0)}/{detail.get('project_goals_total', 0)}."
+        )
+        overview_bullets.append(
+            f"Comments: {detail.get('task_comment_count', 0)} task comment(s), "
+            f"{detail.get('project_comment_count', 0)} project comment(s)."
+        )
+
+    if projects:
+        for proj in projects[:5]:
+            overview_bullets.append(
+                f"Project **{proj.get('name','Project')}** ({proj.get('status_label')}): "
+                f"{proj.get('user_task_completed') or 0}/{proj.get('user_task_total') or 0} user task(s) completed, "
+                f"{proj.get('task_overdue', 0)} overdue."
+            )
+    if tasks:
+        for task in tasks[:5]:
+            overview_bullets.append(
+                f"Task **{task.get('title','Task')}**: {task.get('status')} "
+                f"({task.get('goals_achieved', 0)}/{task.get('goals_total', 0)} goals achieved)."
+            )
+    if not tasks:
+        for detail in user_details:
+            recent_titles = [
+                task.get("title") for task in detail.get("recent_tasks", []) if task.get("title")
+            ]
+            if recent_titles:
+                overview_bullets.append(
+                    f"Recent tasks for **{detail.get('name','User')}**: {', '.join(recent_titles[:3])}."
+                )
+
+    conclusions_bullets = []
+    if overdue_tasks > 0:
+        conclusions_bullets.append("Overdue tasks require immediate follow up to keep delivery on track.")
+    if completion_rate >= 70:
+        conclusions_bullets.append("Completion pace is strong for the selected user scope.")
+    elif completion_rate >= 40:
+        conclusions_bullets.append("Progress is steady but needs higher completion velocity.")
+    else:
+        conclusions_bullets.append("Completion pace is low; focus on closing in-progress tasks.")
+    if total_projects == 0:
+        conclusions_bullets.append("No active projects are currently linked to this user selection.")
+
+    recommendations_bullets = [
+        "Prioritize overdue and on-hold tasks, update owners, and confirm due dates.",
+        "Log goal achievements consistently after the 7-day window to keep task signals accurate.",
+        "For owned projects, align weekly goals with task outcomes and address blockers quickly."
+    ]
+
+    task_summary = (
+        f"{total_tasks} task(s) for selected user(s) with {completion_rate}% completion and "
+        f"{overdue_tasks} overdue task(s)."
+    )
+    task_bullets = []
+    for task in tasks[:12]:
+        task_bullets.append(
+            f"Task **{task.get('title','Task')}**: {task.get('status')}, "
+            f"priority {task.get('priority') or 'normal'}, "
+            f"{task.get('goals_achieved', 0)}/{task.get('goals_total', 0)} goals achieved."
+        )
+    if not task_bullets:
+        for detail in user_details:
+            recent_titles = [
+                task.get("title") for task in detail.get("recent_tasks", []) if task.get("title")
+            ]
+            if recent_titles:
+                task_bullets.append(
+                    f"Recent tasks for **{detail.get('name','User')}**: {', '.join(recent_titles[:3])}."
+                )
+    if not task_bullets:
+        task_bullets.append("No task details are available for the selected user scope.")
+
+    user_insights = []
+    for detail in user_details:
+        recent_titles = [
+            task.get("title") for task in detail.get("recent_tasks", []) if task.get("title")
+        ]
+        overview_lines = [
+            f"{detail.get('project_count', 0)} projects across {detail.get('group_count', 0)} groups.",
+            f"{detail.get('task_total', 0)} tasks with {detail.get('task_completed', 0)} completed and "
+            f"{detail.get('task_overdue', 0)} overdue.",
+            f"Owned projects: {detail.get('project_owner_count', 0)}. "
+            f"Access projects: {detail.get('project_access_count', 0)}.",
+            f"Task goals achieved: {detail.get('task_goals_achieved', 0)}/{detail.get('task_goals_total', 0)}. "
+            f"Project goals matched: {detail.get('project_goals_matched', 0)}/"
+            f"{detail.get('project_goals_total', 0)}.",
+            f"Comments logged: {detail.get('task_comment_count', 0)} task, "
+            f"{detail.get('project_comment_count', 0)} project."
+        ]
+        if recent_titles:
+            overview_lines.append(f"Recent tasks: {', '.join(recent_titles[:3])}.")
+        user_insights.append({
+            "user_id": detail.get("user_id"),
+            "name": detail.get("name"),
+            "overview": overview_lines,
+            "conclusions": [
+                f"Project ownership: {detail.get('project_owner_count', 0)} owned project(s).",
+                f"Task goals achieved: {detail.get('task_goals_achieved', 0)}/{detail.get('task_goals_total', 0)}.",
+                f"Overdue tasks: {detail.get('task_overdue', 0)}."
+            ],
+            "recommendations": [
+                "Close overdue tasks first, then focus on goal achievement logging.",
+                "Use project comments to capture progress updates and unblock dependencies."
+            ]
+        })
+
+    return {
+        "overview": {"summary": overview_summary, "bullets": overview_bullets},
+        "conclusions": {"bullets": conclusions_bullets},
+        "recommendations": {"bullets": recommendations_bullets},
+        "task_insights": {"summary": task_summary, "bullets": task_bullets},
         "user_insights": user_insights,
         "source": "fallback"
     }
@@ -1657,14 +2016,17 @@ async def generate_admin_filter_insights(
     projects: List[Dict[str, Any]],
     tasks: List[Dict[str, Any]],
     users: List[Dict[str, Any]],
-    filters: Dict[str, Any]
+    filters: Dict[str, Any],
+    comments: List[Dict[str, Any]] | None = None
 ) -> Dict[str, Any]:
     now = datetime.utcnow()
+    comments = comments or []
     group_ids = _normalize_str_list(filters.get("group_ids") or filters.get("groupIds"))
     project_ids = _normalize_str_list(filters.get("project_ids") or filters.get("projectIds"))
     user_ids = _normalize_str_list(filters.get("user_ids") or filters.get("userIds"))
 
     open_projects = [p for p in projects if not _project_is_closed(p)]
+    project_lookup = {_project_id(p): p for p in projects}
     tasks_by_project: Dict[str, List[Dict[str, Any]]] = {}
     for task in tasks:
         pid = _task_project_id(task)
@@ -1672,16 +2034,46 @@ async def generate_admin_filter_insights(
             continue
         tasks_by_project.setdefault(pid, []).append(task)
 
+    task_comment_counts: Dict[str, int] = {}
+    task_comment_selected_counts: Dict[str, int] = {}
+    project_comment_counts: Dict[str, int] = {}
+    project_comment_selected_counts: Dict[str, int] = {}
+    for comment in comments:
+        comment_user_id = str(comment.get("user_id") or "")
+        task_id = comment.get("task_id") or comment.get("taskId")
+        project_id = comment.get("project_id") or comment.get("projectId")
+        if task_id:
+            tid = str(task_id)
+            task_comment_counts[tid] = task_comment_counts.get(tid, 0) + 1
+            if user_ids and comment_user_id in user_ids:
+                task_comment_selected_counts[tid] = task_comment_selected_counts.get(tid, 0) + 1
+        if project_id:
+            pid = str(project_id)
+            project_comment_counts[pid] = project_comment_counts.get(pid, 0) + 1
+            if user_ids and comment_user_id in user_ids:
+                project_comment_selected_counts[pid] = project_comment_selected_counts.get(pid, 0) + 1
+
+    user_scoped_tasks = []
+    user_scoped_project_ids = set()
+    if user_ids:
+        user_scoped_tasks = [
+            task for task in tasks if any(_task_involves_user(task, uid) for uid in user_ids)
+        ]
+        for task in user_scoped_tasks:
+            pid = _task_project_id(task)
+            if pid:
+                user_scoped_project_ids.add(pid)
+        for project in open_projects:
+            if any(_project_involves_user(project, uid) for uid in user_ids):
+                user_scoped_project_ids.add(_project_id(project))
+
     scoped_projects = open_projects
+    if user_ids:
+        scoped_projects = [p for p in scoped_projects if _project_id(p) in user_scoped_project_ids]
     if group_ids:
         scoped_projects = [p for p in scoped_projects if _project_group_id(p) in group_ids]
     if project_ids:
         scoped_projects = [p for p in scoped_projects if _project_id(p) in project_ids]
-    if user_ids:
-        scoped_projects = [
-            p for p in scoped_projects
-            if _project_has_user_activity(p, tasks_by_project.get(_project_id(p), []), user_ids)
-        ]
 
     no_filters = not group_ids and not project_ids and not user_ids
     analysis_projects = _sort_projects_recent(scoped_projects)
@@ -1692,15 +2084,45 @@ async def generate_admin_filter_insights(
     scope_project_ids = {_project_id(p) for p in scoped_projects}
 
     scoped_tasks = [t for t in tasks if _task_project_id(t) in scope_project_ids]
-    analysis_tasks = [t for t in scoped_tasks if _task_project_id(t) in analysis_project_ids]
     if user_ids:
-        analysis_tasks = [t for t in analysis_tasks if any(_task_involves_user(t, uid) for uid in user_ids)]
+        scoped_tasks = [t for t in scoped_tasks if any(_task_involves_user(t, uid) for uid in user_ids)]
+    analysis_tasks = [t for t in scoped_tasks if _task_project_id(t) in analysis_project_ids]
+    if analysis_tasks and len(analysis_tasks) > settings.ai_project_task_limit:
+        analysis_tasks = analysis_tasks[:settings.ai_project_task_limit]
+
+    scoped_tasks_by_project: Dict[str, List[Dict[str, Any]]] = {}
+    for task in scoped_tasks:
+        pid = _task_project_id(task)
+        if not pid:
+            continue
+        scoped_tasks_by_project.setdefault(pid, []).append(task)
+
+    tasks_for_snapshots = scoped_tasks_by_project if user_ids else tasks_by_project
 
     project_snapshots = [
-        _build_project_snapshot(p, tasks_by_project.get(_project_id(p), []), now)
+        _build_project_snapshot(
+            p,
+            tasks_for_snapshots.get(_project_id(p), []),
+            now,
+            user_ids=user_ids,
+            project_comment_counts=project_comment_counts,
+            project_comment_selected_counts=project_comment_selected_counts
+        )
         for p in analysis_projects
     ]
     top_projects = project_snapshots[:5]
+
+    task_details = [
+        _build_task_snapshot(
+            task,
+            now,
+            user_ids=user_ids,
+            task_comment_counts=task_comment_counts,
+            task_comment_selected_counts=task_comment_selected_counts,
+            project_lookup=project_lookup
+        )
+        for task in analysis_tasks
+    ]
 
     scope_groups = {
         _project_group_id(p) for p in scoped_projects if _project_group_id(p)
@@ -1729,7 +2151,13 @@ async def generate_admin_filter_insights(
         for uid in user_ids:
             user = user_map.get(uid)
             if user:
-                scoped_users.append(_build_user_snapshot(user, scoped_tasks, now))
+                snapshot = _build_user_snapshot(user, scoped_tasks, now)
+                access_projects = [
+                    p for p in scoped_projects if _project_involves_user(p, uid)
+                ]
+                snapshot["project_access_count"] = len(access_projects)
+                snapshot["project_access_names"] = [p.get("name", "") for p in access_projects][:5]
+                scoped_users.append(snapshot)
     else:
         user_ids_in_scope = set()
         for task in scoped_tasks:
@@ -1738,6 +2166,22 @@ async def generate_admin_filter_insights(
             user = user_map.get(uid)
             if user:
                 scoped_users.append(_build_user_snapshot(user, scoped_tasks, now))
+
+    user_focus_details = []
+    if user_ids:
+        for uid in user_ids:
+            user = user_map.get(uid)
+            if user:
+                user_focus_details.append(
+                    _build_user_focus_details(
+                        user,
+                        scoped_projects,
+                        scoped_tasks,
+                        scoped_tasks_by_project,
+                        comments,
+                        now
+                    )
+                )
 
     total_tasks = len(scoped_tasks)
     completed_tasks = len([t for t in scoped_tasks if t.get("status") == "completed"])
@@ -1752,6 +2196,11 @@ async def generate_admin_filter_insights(
             "project_ids": project_ids,
             "user_ids": user_ids
         },
+        "user_focus": bool(user_ids),
+        "selected_users": [
+            {"user_id": u.get("user_id"), "name": u.get("name")}
+            for u in scoped_users
+        ],
         "totals": {
             "groups": len(scope_groups),
             "projects": len(scoped_projects),
@@ -1761,15 +2210,22 @@ async def generate_admin_filter_insights(
         },
         "projects": project_snapshots,
         "top_projects": top_projects,
+        "task_details": task_details,
         "groups": group_snapshots,
-        "users": scoped_users
+        "users": scoped_users,
+        "user_focus_details": user_focus_details
     }
 
     system_prompt = (
         "You are an AI insights analyst for a project management admin dashboard. "
         "Provide concise, structured insights with clear bullet points. "
-        "Return JSON only with keys: overview, conclusions, recommendations, user_insights. "
+        "Use only the provided context and do not invent data. "
+        "If user_ids are provided, focus only on those users and do not mention other users. "
+        "When user_focus is true, use user_focus_details to report counts for groups, projects, "
+        "ownership, access, tasks, goals, and comment activity. "
+        "Return JSON only with keys: overview, conclusions, recommendations, task_insights, user_insights. "
         "Each section should have bullets arrays; overview should include a short summary. "
+        "task_insights should include a short summary and bullet list of task status and goal progress. "
         "If user filters are provided, include user_insights items with user_id and name."
     )
 
@@ -1778,7 +2234,12 @@ async def generate_admin_filter_insights(
         "Use **bold** for project and group names. "
         "Overview summary should be 80-120 words with 3-6 bullets. "
         "Conclusions and recommendations should each have 3-6 bullets. "
-        "If user_insights are provided, each should have overview, conclusions, recommendations arrays."
+        "If user_insights are provided, each should have overview, conclusions, recommendations arrays. "
+        "When user_focus is true, only discuss tasks and projects tied to selected users. "
+        "For projects where user_project_access is false, avoid project-level leadership commentary and focus on task work. "
+        "When user_focus is true, include per-user counts from user_focus_details and highlight up to 3 recent tasks "
+        "and 3 projects from task_details/projects. "
+        "Always include task_insights with a summary and 4-8 bullets."
         f"\n\nContext:\n{json.dumps(context, ensure_ascii=True)}"
     )
 
@@ -1791,7 +2252,7 @@ async def generate_admin_filter_insights(
     )
     parsed = _safe_json_loads(content or "")
     if not parsed:
-        fallback = _fallback_admin_filter_insights(context)
+        fallback = _fallback_user_focus_insights(context) if user_ids else _fallback_admin_filter_insights(context)
         fallback["generated_at"] = _to_iso_z(now)
         fallback["ai_error"] = error
         return fallback
@@ -1799,6 +2260,7 @@ async def generate_admin_filter_insights(
     overview = parsed.get("overview")
     conclusions = parsed.get("conclusions")
     recommendations = parsed.get("recommendations")
+    task_insights = parsed.get("task_insights") or parsed.get("taskInsights")
     user_insights = parsed.get("user_insights") or []
 
     def _normalize_section(section: Any, include_summary: bool = False) -> Dict[str, Any]:
@@ -1826,10 +2288,13 @@ async def generate_admin_filter_insights(
         "overview": _normalize_section(overview, include_summary=True),
         "conclusions": _normalize_section(conclusions),
         "recommendations": _normalize_section(recommendations),
+        "task_insights": _normalize_section(task_insights, include_summary=True),
         "user_insights": []
     }
 
     for item in _coerce_list(user_insights):
+        if not isinstance(item, dict):
+            continue
         cleaned["user_insights"].append({
             "user_id": str(item.get("user_id") or ""),
             "name": _clean_ai_text(item.get("name") or "User"),
@@ -1838,13 +2303,15 @@ async def generate_admin_filter_insights(
             "recommendations": [_clean_ai_text(v) for v in _coerce_list(item.get("recommendations") or []) if v]
         })
 
-    fallback = _fallback_admin_filter_insights(context)
+    fallback = _fallback_user_focus_insights(context) if user_ids else _fallback_admin_filter_insights(context)
     if not cleaned["overview"]["summary"] and not cleaned["overview"]["bullets"]:
         cleaned["overview"] = fallback["overview"]
     if not cleaned["conclusions"]["bullets"]:
         cleaned["conclusions"] = fallback["conclusions"]
     if not cleaned["recommendations"]["bullets"]:
         cleaned["recommendations"] = fallback["recommendations"]
+    if not cleaned["task_insights"].get("summary") and not cleaned["task_insights"]["bullets"]:
+        cleaned["task_insights"] = fallback.get("task_insights", {})
     if not cleaned["user_insights"] and fallback.get("user_insights"):
         cleaned["user_insights"] = fallback["user_insights"]
 

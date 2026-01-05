@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Clock, Filter, Layers, RefreshCw, Users } from 'lucide-react'
+import { AlertTriangle, Clock, Filter, Layers, ListChecks, RefreshCw, Users } from 'lucide-react'
 import { aiService } from '../../services/ai.service'
 import { groupService } from '../../services/group.service'
 import { projectService } from '../../services/project.service'
@@ -24,6 +24,13 @@ const getProjectEndDate = (project) => {
   const endDate = project?.endDate || project?.end_date || project?.dueDate || project?.due_date
   if (!endDate) return null
   const parsed = new Date(endDate)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+const getTaskDueDate = (task) => {
+  const dueDate = task?.dueDate || task?.due_date
+  if (!dueDate) return null
+  const parsed = new Date(dueDate)
   return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
@@ -437,8 +444,13 @@ export default function Insights() {
       const endDate = getProjectEndDate(project)
       return endDate && endDate < new Date() && !isProjectClosed(project)
     }).length
-    return { totalGroups, totalProjects, ongoing, overdue }
-  }, [filteredProjects])
+    const totalTasks = filteredTasks.length
+    const overdueTasks = filteredTasks.filter((task) => {
+      const dueDate = getTaskDueDate(task)
+      return dueDate && dueDate < new Date() && task.status !== 'completed'
+    }).length
+    return { totalGroups, totalProjects, ongoing, overdue, totalTasks, overdueTasks }
+  }, [filteredProjects, filteredTasks])
 
   const groupInsights = useMemo(() => {
     return filteredGroups.map((group) => {
@@ -449,8 +461,8 @@ export default function Insights() {
       const groupTasks = filteredTasks.filter((task) => projectIds.includes(getTaskProjectId(task)))
       const completed = groupTasks.filter((task) => task.status === 'completed').length
       const overdue = groupTasks.filter((task) => {
-        const due = new Date(task.dueDate || task.due_date || '')
-        return !Number.isNaN(due.getTime()) && due < new Date() && task.status !== 'completed'
+        const due = getTaskDueDate(task)
+        return due && due < new Date() && task.status !== 'completed'
       }).length
       const completionRate = groupTasks.length
         ? Math.round((completed / groupTasks.length) * 100)
@@ -468,8 +480,8 @@ export default function Insights() {
       const projectTasks = filteredTasksByProject.get(getProjectId(project)) || []
       const completed = projectTasks.filter((task) => task.status === 'completed').length
       const overdue = projectTasks.filter((task) => {
-        const due = new Date(task.dueDate || task.due_date || '')
-        return !Number.isNaN(due.getTime()) && due < new Date() && task.status !== 'completed'
+        const due = getTaskDueDate(task)
+        return due && due < new Date() && task.status !== 'completed'
       }).length
       const completionRate = projectTasks.length
         ? Math.round((completed / projectTasks.length) * 100)
@@ -547,6 +559,7 @@ export default function Insights() {
   const overview = aiInsight?.overview
   const conclusions = aiInsight?.conclusions
   const recommendations = aiInsight?.recommendations
+  const taskInsights = aiInsight?.task_insights || aiInsight?.taskInsights
   const userInsights = aiInsight?.user_insights || aiInsight?.userInsights || []
   const generatedAt = aiInsight?.generated_at || aiInsight?.generatedAt
 
@@ -557,7 +570,7 @@ export default function Insights() {
         <p className="text-gray-500 mt-1">AI-powered analysis of your projects and tasks</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
         <div className="card">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center">
@@ -601,7 +614,19 @@ export default function Insights() {
             </div>
             <div>
               <p className="text-2xl font-bold text-gray-900">{kpi.overdue}</p>
-              <p className="text-sm text-gray-500">Overdue</p>
+              <p className="text-sm text-gray-500">Overdue Projects</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+              <ListChecks className="text-orange-600" size={22} />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-gray-900">{kpi.overdueTasks}</p>
+              <p className="text-sm text-gray-500">Overdue Tasks</p>
             </div>
           </div>
         </div>
@@ -735,6 +760,61 @@ export default function Insights() {
         ) : (
           <p className="text-sm text-gray-400 text-center py-6">No insights yet. Filters will auto-refresh.</p>
         )}
+      </div>
+
+      <div className="card">
+        <div className="flex items-center gap-2 mb-4">
+          <ListChecks className="text-orange-600" size={20} />
+          <h2 className="font-semibold text-gray-900">Task Insights</h2>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm text-gray-500">
+              Total tasks in scope: <span className="font-semibold text-gray-900">{kpi.totalTasks}</span>
+            </p>
+            {taskInsights?.summary && (
+              <p className="mt-2 text-sm text-gray-700 leading-relaxed">{renderWithBold(taskInsights.summary)}</p>
+            )}
+            {taskInsights?.bullets?.length > 0 && (
+              <ul className="mt-3 space-y-2 text-sm text-gray-700 list-disc list-inside">
+                {taskInsights.bullets.map((item, index) => (
+                  <li key={`task-insight-${index}`}>{renderWithBold(item)}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="rounded-lg border border-gray-100 max-h-80 overflow-auto">
+            {filteredTasks.length > 0 ? (
+              <ul className="divide-y divide-gray-100">
+                {filteredTasks.map((task) => {
+                  const projectName = projectMap.get(getTaskProjectId(task))?.name || 'Project'
+                  const dueDate = getTaskDueDate(task)
+                  const overdue = dueDate && dueDate < new Date() && task.status !== 'completed'
+                  return (
+                    <li key={normalizeId(task._id || task.id)} className="p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-gray-900">{task.title || 'Task'}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {projectName} · {task.status || 'status unknown'}
+                            {task.priority ? ` · ${task.priority}` : ''}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-xs font-medium ${overdue ? 'text-red-600' : 'text-gray-500'}`}>
+                            {dueDate ? `Due ${formatDateTime(dueDate)}` : 'No due date'}
+                          </p>
+                        </div>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-6">No tasks available for this filter.</p>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">

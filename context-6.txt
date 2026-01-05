@@ -410,4 +410,20 @@ and its related data , and our system understand it and send the gathered data t
 the insights all modules will be in sync 
 
 Understand what i am saying because of this we will only see AI insights of work and other data of a selected user in user filter
-no other users data will come that how admin will know who much work a user is doing , where to do improvments 
+no other users data will come thats how admin will know how much work a user is doing , where to do improvments, where user is lacking 
+on which tasks user is doing good, on which tasks user not completed its tasks via (goals & achievements of tasks level by comparision of goal and achievement which click tick on the goal),
+on which projects if user is have project level access how much good grip user have on its project ,
+how much tasks assigned in the project or projects if multiple project access user have, 
+project health (project priority stage, project due date exceeds or not what to do by AI), understand the 
+achievement of project via goal and achievement of project level by comparision of goals and its after 7 day reply of achievement compare it 
+that the work is really completed or not , project level commenting system.
+
+By all these data user related AI insights and other insights modules will be updated and are in sync with the AI insight who got the all data of user form the system.
+after filter applying.
+
+Understand my intent and working of AI insights generation what i am visioning and how robust and
+error free Ai insights i want in the AI insights panel.
+with no AI hallucination and only give correct data insights 
+
+
+I did'nt only mean show only those project that the user have access and groups but a comphrensive insights if he is access of any project as well have tasks in many project so insights of those tasks ,as well as show all projects and groups that he is involved in understand what i am saying previous one was good but the insights was not showing the comprehensive detailed insights , that i user selected how many project owner he is how much takss he is involved in and how many groups he is in and all each tasks and project level insights , understand

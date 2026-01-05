@@ -287,12 +287,13 @@ async def get_filtered_admin_insights(
     filters: AdminInsightFilters,
     current_user: dict = Depends(require_role(["admin", "manager"]))
 ):
-    from ..database import get_groups_collection, get_users_collection
+    from ..database import get_groups_collection, get_users_collection, get_comments_collection
 
     groups = get_groups_collection()
     projects = get_projects_collection()
     tasks = get_tasks_collection()
     users = get_users_collection()
+    comments = get_comments_collection()
 
     group_list = []
     async for group in groups.find({}):
@@ -310,11 +311,16 @@ async def get_filtered_admin_insights(
     async for user in users.find({}, {"password": 0}):
         user_list.append(user)
 
+    comment_list = []
+    async for comment in comments.find({}):
+        comment_list.append(comment)
+
     insight = await generate_admin_filter_insights(
         group_list,
         project_list,
         task_list,
         user_list,
-        filters.model_dump(by_alias=True)
+        filters.model_dump(by_alias=True),
+        comment_list
     )
     return {"insight": insight}
