@@ -35,6 +35,10 @@ class Settings(BaseSettings):
         default=1440,
         validation_alias=AliasChoices("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "ACCESS_TOKEN_EXPIRE_MINUTES")
     )
+    allowed_origins: str = Field(
+        default="",
+        validation_alias=AliasChoices("ALLOWED_ORIGINS", "CORS_ORIGINS")
+    )
     openai_api_key: str = ""
     openai_model: str = "gpt-4.1-nano"
     ai_project_interval_hours: int = 48

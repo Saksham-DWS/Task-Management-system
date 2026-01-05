@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager, suppress
 import asyncio
 
 from .database import connect_to_mongo, close_mongo_connection
+from .config import settings
 from .services.ai_scheduler import run_ai_scheduler
 from .routes import (
     auth_router,
@@ -37,10 +38,15 @@ app = FastAPI(
 )
 
 # CORS middleware
+allowed_origins = [origin.strip() for origin in settings.allowed_origins.split(",") if origin.strip()]
+if not allowed_origins:
+    allowed_origins = ["http://localhost:3000"]
+allow_credentials = "*" not in allowed_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=allowed_origins,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
