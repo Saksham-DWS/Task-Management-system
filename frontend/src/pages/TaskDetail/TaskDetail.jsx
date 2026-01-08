@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Trash2, Send, AlertTriangle, CheckCircle, Clock, Target, Trophy, Paperclip, X, Image } from 'lucide-react'
+import { ArrowLeft, Trash2, Send, AlertTriangle, CheckCircle, Clock, Paperclip, X, Image } from 'lucide-react'
 import { useUIStore } from '../../store/ui.store'
 import { useAuthStore } from '../../store/auth.store'
 import { useAccess } from '../../hooks/useAccess'
@@ -30,7 +30,7 @@ export default function TaskDetail() {
   const navigate = useNavigate()
   const { user } = useAuthStore()
   const { activeModal, openModal, closeModal } = useUIStore()
-  const { canDeleteTask, canEditTask, canViewGroup, canViewProject, isAdmin } = useAccess()
+  const { canDeleteTask, canEditTask, canViewGroup, canViewProject } = useAccess()
   const fileInputRef = useRef(null)
 
   const [task, setTask] = useState(null)
@@ -38,8 +38,6 @@ export default function TaskDetail() {
   const [loading, setLoading] = useState(true)
   const [newComment, setNewComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [newGoal, setNewGoal] = useState('')
-  const [newAchievement, setNewAchievement] = useState('')
   const [attachments, setAttachments] = useState([])
   const [reviewLoading, setReviewLoading] = useState(false)
   const [replyDrafts, setReplyDrafts] = useState({})
@@ -190,42 +188,6 @@ export default function TaskDetail() {
     }
   }
 
-  const handleAddGoal = async () => {
-    if (!newGoal.trim()) return
-    try {
-      const updated = await taskService.addGoal(id, newGoal)
-      setTask(updated)
-      setNewGoal('')
-    } catch (error) {
-      console.error('Failed to add goal:', error)
-      alert('Failed to add goal. Please try again.')
-    }
-  }
-
-  const handleAddAchievement = async () => {
-    if (!newAchievement.trim()) return
-    const updatedAchievements = [
-      ...(task.weekly_achievements || task.weeklyAchievements || []),
-      { id: Date.now(), text: newAchievement, created_at: new Date().toISOString() }
-    ]
-    try {
-      await taskService.update(id, { weekly_achievements: updatedAchievements })
-      setTask({ ...task, weekly_achievements: updatedAchievements, weeklyAchievements: updatedAchievements })
-      setNewAchievement('')
-    } catch (error) {
-      console.error('Failed to add achievement:', error)
-      alert('Failed to add achievement. Please try again.')
-    }
-  }
-
-  const handleToggleGoal = async (goalId, achieved) => {
-    try {
-      const updated = await taskService.toggleGoal(id, goalId, achieved)
-      setTask(updated)
-    } catch (error) {
-      console.error('Failed to update goal status:', error)
-    }
-  }
 
   if (loading) {
     return (
@@ -253,14 +215,9 @@ export default function TaskDetail() {
   const normalizedStatus = normalizeTaskStatus(task.status)
   const isReviewer = user?.role === 'admin' || user?.role === 'manager' || task.assigned_by?._id === user?._id || task.assigned_by_id === user?._id
   const isAwaitingReview = normalizedStatus === TASK_STATUS.REVIEW
-  const userId = user?._id || user?.id
-  const assigneeIds = task?.assignees?.map(a => a._id) || []
-  const canManageGoals = isAdmin() || assigneeIds.includes(userId)
   const statusClass = TASK_STATUS_COLORS[normalizedStatus] || 'bg-gray-100 text-gray-700'
   const priorityClass = PRIORITY_COLORS[task.priority] || 'bg-gray-100 text-gray-700'
   const overdue = isOverdue(task.dueDate || task.due_date) && normalizedStatus !== TASK_STATUS.COMPLETED
-  const goals = task.weekly_goals || task.weeklyGoals || []
-  const achievements = task.weekly_achievements || task.weeklyAchievements || []
   const activityEntries = [...(task.activity || [])].sort((a, b) => {
     const ta = new Date(a.timestamp || a.time || a.date || 0).getTime()
     const tb = new Date(b.timestamp || b.time || b.date || 0).getTime()
@@ -522,77 +479,6 @@ export default function TaskDetail() {
               </div>
             </div>
           )}
-
-          {/* Task Goals & Achievements (single log) */}
-          <div className="card space-y-4">
-            <div className="flex items-center gap-2">
-              <Target className="text-blue-500" size={20} />
-              <h3 className="font-semibold text-gray-900 dark:text-white">Goals & Achievements</h3>
-            </div>
-
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newGoal}
-                onChange={(e) => setNewGoal(e.target.value)}
-                placeholder="Write a goal for this task..."
-                className="input-field flex-1"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    handleAddGoal()
-                  }
-                }}
-                disabled={!canManageGoals}
-              />
-              <button
-                onClick={handleAddGoal}
-                className="btn-primary disabled:opacity-50"
-                disabled={!canManageGoals || !newGoal.trim()}
-              >
-                Add
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {goals.map(goal => (
-                <div key={goal.id} className="flex items-start gap-3 p-3 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
-                  <input
-                    type="checkbox"
-                    checked={goal.status === 'achieved'}
-                    onChange={(e) => handleToggleGoal(goal.id, e.target.checked)}
-                    disabled={!canManageGoals}
-                    className="mt-1 h-5 w-5 rounded border-gray-300 text-primary-600 disabled:opacity-50"
-                  />
-                  <div className="flex-1 space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={`text-base ${goal.status === 'achieved' ? 'line-through text-gray-400' : 'text-gray-800 dark:text-gray-200'}`}>
-                        {goal.text}
-                      </span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        goal.status === 'achieved'
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : 'bg-amber-100 text-amber-700'
-                      }`}>
-                        {goal.status === 'achieved' ? 'Achieved' : 'Pending'}
-                      </span>
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      By {goal.created_by_name || 'Unknown'} {goal.created_at ? `· ${formatDateTime(goal.created_at)}` : ''}
-                    </div>
-                    {goal.achieved_at && (
-                      <div className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                        Achieved on {formatDateTime(goal.achieved_at)} by {goal.achieved_by_name || 'Unknown'}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {goals.length === 0 && (
-                <p className="text-gray-400 text-sm">No goals yet. Add a goal to start tracking progress.</p>
-              )}
-            </div>
-          </div>
 
           {/* Comments */}
           <div className="card">

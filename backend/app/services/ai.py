@@ -607,13 +607,15 @@ def _project_goal_stats(project: Dict[str, Any]) -> Dict[str, Any]:
     matched = 0
     recent_goals = []
     for goal in goals:
-        achievements = goal.get("achievements") or []
-        if achievements:
+        achieved = goal.get("status") == "achieved" or bool(goal.get("achieved_at"))
+        if achieved:
             matched += 1
         recent_goals.append({
             "text": goal.get("text", ""),
             "created_at": _to_iso_z(goal.get("created_at")),
-            "achievement_count": len(achievements)
+            "status": goal.get("status") or ("achieved" if achieved else "pending"),
+            "achieved_at": _to_iso_z(goal.get("achieved_at")),
+            "achievement_count": 1 if achieved else 0
         })
     match_rate = int((matched / total) * 100) if total else 0
     return {
@@ -926,7 +928,7 @@ def _project_fallback_insights(
     summary_parts = [
         f"{project_label} has {total_tasks} tasks, with {completed} completed.",
         f"{on_hold} task(s) are on hold and {overdue} task(s) are overdue.",
-        f"Goal alignment is {goal_stats['match_rate']}% based on goals with achievements."
+        f"Goal alignment is {goal_stats['match_rate']}% based on goals marked achieved."
     ]
     if project_comments or task_comments:
         summary_parts.append(
@@ -964,7 +966,7 @@ def _project_fallback_insights(
     return {
         "summary": summary,
         "recommendation": " ".join(recommendations),
-        "goals_summary": f"{goal_stats['matched']} of {goal_stats['total']} goals have achievements.",
+        "goals_summary": f"{goal_stats['matched']} of {goal_stats['total']} goals are marked achieved.",
         "citations": citations,
         "task_insights": task_insights,
         "source": "fallback"
@@ -1003,7 +1005,7 @@ def _project_expansion_sections(
         ),
         (
             f"Goals and achievements alignment for {project_label} is {goal_stats['match_rate']}% with "
-            f"{goal_stats['matched']} goals showing achievement replies. "
+            f"{goal_stats['matched']} goals marked achieved. "
             "Use weekly check-ins to convert pending goals into measurable outcomes."
         ),
         (
@@ -1025,7 +1027,7 @@ def _project_expansion_sections(
             "and update the due date to reflect reality. This keeps the delivery plan credible."
         ),
         (
-            f"Use short weekly goals in {project_label} tied to acceptance criteria so achievements are easy to log. "
+            f"Use short weekly goals in {project_label} tied to acceptance criteria so goals are easy to mark achieved. "
             "When goals are missed, document the blocker and adjust scope early."
         ),
         (
@@ -1036,8 +1038,8 @@ def _project_expansion_sections(
 
     goals_sections = [
         (
-            f"{goal_stats['matched']} of {goal_stats['total']} goals in {project_label} have achievement replies. "
-            "Goals without replies should be revisited with the owner after the 7 day window."
+            f"{goal_stats['matched']} of {goal_stats['total']} goals in {project_label} are marked achieved. "
+            "Goals without progress should be revisited with the owner for updates."
         ),
         (
             "Strong goal tracking comes from clear success criteria, short timeboxes, and quick feedback loops. "
@@ -1801,7 +1803,7 @@ def _fallback_admin_filter_insights(context: Dict[str, Any]) -> Dict[str, Any]:
         goal_window_met = sum(p.get("goal_window_met", 0) for p in projects)
         if goal_window_total:
             overview_bullets.append(
-                f"7-day goal window: {goal_window_met}/{goal_window_total} tasks met their goal updates."
+                f"Goal update coverage: {goal_window_met}/{goal_window_total} tasks met their goal updates."
             )
 
     conclusions_bullets = []
@@ -1820,7 +1822,7 @@ def _fallback_admin_filter_insights(context: Dict[str, Any]) -> Dict[str, Any]:
     if overdue_tasks > 0:
         recommendations_bullets.append("Prioritize overdue tasks and adjust owners and due dates.")
     recommendations_bullets.append("Close review-stage work to raise completion momentum.")
-    recommendations_bullets.append("Keep weekly goals short and track achievements after the 7-day window.")
+    recommendations_bullets.append("Keep weekly goals short and track achievements consistently.")
 
     task_summary = (
         f"{total_tasks} task(s) in scope with {completion_rate}% completion and "
@@ -1949,7 +1951,7 @@ def _fallback_user_focus_insights(context: Dict[str, Any]) -> Dict[str, Any]:
 
     recommendations_bullets = [
         "Prioritize overdue and on-hold tasks, update owners, and confirm due dates.",
-        "Log goal achievements consistently after the 7-day window to keep task signals accurate.",
+        "Log goal achievements consistently to keep task signals accurate.",
         "For owned projects, align weekly goals with task outcomes and address blockers quickly."
     ]
 

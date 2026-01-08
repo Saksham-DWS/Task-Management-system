@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { DragDropContext } from '@hello-pangea/dnd'
-import { ArrowLeft, Settings, Target, Trophy, BarChart3, Plus, CalendarDays, Send, Paperclip, Image } from 'lucide-react'
+import { ArrowLeft, Settings, Target, BarChart3, Plus, CalendarDays, Send, Paperclip, Image } from 'lucide-react'
 import { useUIStore } from '../../store/ui.store'
 import { useAuthStore } from '../../store/auth.store'
 import { useAccess } from '../../hooks/useAccess'
@@ -30,7 +30,7 @@ export default function ProjectDetail() {
   const [activeTab, setActiveTab] = useState('board')
   const [goals, setGoals] = useState([])
   const [newGoal, setNewGoal] = useState('')
-  const [achievementDrafts, setAchievementDrafts] = useState({})
+  const [goalStatusUpdating, setGoalStatusUpdating] = useState({})
   const [initialStatus, setInitialStatus] = useState(TASK_STATUS.NOT_STARTED)
   const [allUsers, setAllUsers] = useState([])
   const [activity, setActivity] = useState([])
@@ -193,7 +193,7 @@ export default function ProjectDetail() {
     try {
       const updatedProject = await projectService.addGoal(id, newGoal)
       setProject(updatedProject)
-      setGoals(updatedProject.weeklyGoals || [])
+      setGoals(updatedProject.weeklyGoals || updatedProject.weekly_goals || [])
       setNewGoal('')
       setActivity(updatedProject.activity || [])
     } catch (error) {
@@ -201,22 +201,14 @@ export default function ProjectDetail() {
     }
   }
 
-  const handleAddAchievement = async (goalId) => {
-    const text = achievementDrafts[goalId] || ''
-    if (!text.trim()) return
-    try {
-      const updatedProject = await projectService.addAchievement(id, goalId, text)
-      setProject(updatedProject)
-      setGoals(updatedProject.weeklyGoals || [])
-      setAchievementDrafts((prev) => ({ ...prev, [goalId]: '' }))
-      setActivity(updatedProject.activity || [])
-    } catch (error) {
-      console.error('Failed to add achievement:', error)
-    }
+  const isGoalAchieved = (goal) => {
+    if (!goal) return false
+    if (goal.status) return goal.status === 'achieved'
+    return Boolean(goal.achieved_at || goal.achievedAt)
   }
 
   const groupedTasks = groupTasksByStatus(tasks)
-  const achievedGoalsCount = goals.filter((g) => (g.achievements || []).length > 0).length
+  const achievedGoalsCount = goals.filter((goal) => isGoalAchieved(goal)).length
   const progress = calculateProgress(achievedGoalsCount, goals.length)
 
   const handleOpenEdit = () => {
@@ -353,14 +345,54 @@ export default function ProjectDetail() {
   ;(project.collaborators || []).forEach(addMember)
   const teamMembers = orderedMembers
 
-  const canLogAchievement = (goal) => {
+  const canToggleGoal = (goal) => {
     if (!goal) return false
-    if (!goal.created_at) return false
-    const created = new Date(goal.created_at)
-    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000
-    const windowReached = (Date.now() - created.getTime()) >= sevenDaysMs
-    const isOwnerOrAdmin = isAdmin || String(goal.created_by_id) === String(userId)
-    return windowReached && isOwnerOrAdmin
+    const currentId = String(userId || '')
+    if (isAdmin) return true
+    if (String(goal.created_by_id) === currentId) return true
+    const projectId = String(project?._id || '')
+    const groupId = String(project?.groupId || project?.group_id || '')
+    if (projectId && canCreateInProject(projectId, groupId)) return true
+    const accessIds = new Set([
+      String(project?.owner?._id || project?.owner?.id || ''),
+      ...accessUserIds.map((id) => String(id || '')),
+      ...accessUsers.map((member) => String(member?._id || member?.id || '')),
+      ...(project?.collaborators || []).map((member) => String(member?._id || member?.id || ''))
+    ])
+    accessIds.delete('')
+    return accessIds.has(currentId)
+  }
+
+  const handleToggleGoal = async (goal) => {
+    if (!goal) return
+    const goalId = goal.id
+    const nextAchieved = !isGoalAchieved(goal)
+    setGoalStatusUpdating((prev) => ({ ...prev, [goalId]: true }))
+    setGoals((prev) => prev.map((item) => {
+      if (item.id !== goalId) return item
+      return {
+        ...item,
+        status: nextAchieved ? 'achieved' : 'pending',
+        achieved_at: nextAchieved ? new Date().toISOString() : null,
+        achieved_by_name: nextAchieved ? (user?.name || 'Unknown') : null,
+        achieved_by_id: nextAchieved ? userId : null
+      }
+    }))
+    try {
+      const updatedProject = await projectService.updateGoalStatus(id, goalId, nextAchieved)
+      setProject(updatedProject)
+      setGoals(updatedProject.weeklyGoals || updatedProject.weekly_goals || [])
+      setActivity(updatedProject.activity || [])
+    } catch (error) {
+      console.error('Failed to update goal status:', error)
+      refreshProjectActivity()
+    } finally {
+      setGoalStatusUpdating((prev) => {
+        const copy = { ...prev }
+        delete copy[goalId]
+        return copy
+      })
+    }
   }
 
   const sortedComments = [...comments].sort((a, b) => {
@@ -659,70 +691,45 @@ export default function ProjectDetail() {
             </div>
             <div className="space-y-3">
               {goals.map((goal) => {
-                const canReply = canLogAchievement(goal)
-                const replies = goal.achievements || []
+                const isAchieved = isGoalAchieved(goal)
+                const canToggle = canToggleGoal(goal)
+                const updating = Boolean(goalStatusUpdating[goal.id])
+                const createdAt = formatDateTime(goal.created_at || goal.createdAt)
+                const achievedAt = formatDateTime(goal.achieved_at || goal.achievedAt)
+                const achievedBy = goal.achieved_by_name || goal.achievedByName || 'Unknown'
                 return (
                   <div key={goal.id} className="p-3 rounded-lg border border-gray-200 bg-white shadow-sm">
                     <div className="flex items-start gap-3">
-                      <Trophy className="text-yellow-500 mt-1" size={18} />
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        checked={isAchieved}
+                        disabled={!canToggle || updating}
+                        onChange={() => handleToggleGoal(goal)}
+                      />
                       <div className="flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-base text-gray-900">{goal.text}</span>
-                          <span className="text-xs text-gray-500">
-                            By {goal.created_by_name || 'Unknown'} | {formatDateTime(goal.created_at)}
+                          <span className={`text-base ${isAchieved ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
+                            {goal.text}
                           </span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            isAchieved ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {isAchieved ? 'Achieved' : 'Pending'}
+                          </span>
+                          {updating && <span className="text-xs text-gray-400">Updating...</span>}
                         </div>
-                        <div className="mt-2">
-                          <button
-                            type="button"
-                            onClick={() => setAchievementDrafts((prev) => ({ ...prev, [goal.id]: prev[goal.id] || '' }))}
-                            className="text-sm text-primary-600 hover:underline disabled:opacity-50"
-                            disabled={!canReply}
-                          >
-                            {canReply ? 'Log Achievement / Reply' : 'Available after 7 days (goal owner or admin)'}
-                          </button>
+                        <div className="text-xs text-gray-500 mt-1">
+                          By {goal.created_by_name || 'Unknown'} | {createdAt}
                         </div>
-                        {achievementDrafts[goal.id] !== undefined && (
-                          <div className="mt-2 space-y-2 border-l pl-3">
-                            <textarea
-                              value={achievementDrafts[goal.id]}
-                              onChange={(e) => setAchievementDrafts((prev) => ({ ...prev, [goal.id]: e.target.value }))}
-                              className="input-field w-full min-h-[60px]"
-                              placeholder="Write achievement/update..."
-                            />
-                            <div className="flex gap-2">
-                              <button
-                                type="button"
-                                onClick={() => handleAddAchievement(goal.id)}
-                                className="btn-primary px-3 py-2 text-sm"
-                                disabled={!achievementDrafts[goal.id]?.trim()}
-                              >
-                                Post
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setAchievementDrafts((prev) => {
-                                  const copy = { ...prev }
-                                  delete copy[goal.id]
-                                  return copy
-                                })}
-                                className="btn-secondary px-3 py-2 text-sm"
-                              >
-                                Cancel
-                              </button>
-                            </div>
+                        {isAchieved && (
+                          <div className="text-xs text-green-600 mt-1">
+                            Achieved on {achievedAt || createdAt} by {achievedBy}
                           </div>
                         )}
-                        {replies.length > 0 && (
-                          <div className="mt-3 space-y-2">
-                            {replies.map((reply) => (
-                              <div key={reply.id} className="p-2 rounded bg-gray-50 border border-gray-200">
-                                <p className="text-gray-800">{reply.text}</p>
-                                <p className="text-xs text-gray-500 mt-1">
-                                  By {reply.created_by_name || 'Unknown'} | {formatDateTime(reply.created_at)}
-                                </p>
-                              </div>
-                            ))}
+                        {!canToggle && (
+                          <div className="text-xs text-gray-400 mt-1">
+                            Only project access users or the goal owner can update this goal.
                           </div>
                         )}
                       </div>

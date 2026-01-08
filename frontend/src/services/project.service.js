@@ -152,6 +152,11 @@ export const projectService = {
     return normalizeProject(response.data)
   },
 
+  updateGoalStatus: async (id, goalId, achieved) => {
+    const response = await api.put(`/projects/${id}/goals/${goalId}/status`, { achieved })
+    return normalizeProject(response.data)
+  },
+
   getComments: async (id) => {
     const response = await api.get(`/projects/${id}/comments`)
     return response.data

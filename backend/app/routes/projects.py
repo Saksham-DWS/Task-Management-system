@@ -245,7 +245,8 @@ def has_group_access(current_user: dict, group_id: str) -> bool:
     if role in ["admin", "manager"]:
         return True
     access = current_user.get("access", {}) or {}
-    return group_id in access.get("group_ids", [])
+    group_ids = normalize_id_list(access.get("group_ids", []))
+    return str(group_id) in group_ids
 
 def has_project_access(current_user: dict, project_id: str, group_id: str, project: dict | None = None) -> bool:
     role = current_user.get("role", "user")
@@ -253,16 +254,26 @@ def has_project_access(current_user: dict, project_id: str, group_id: str, proje
         return True
     current_user_id = str(current_user.get("_id"))
     access = current_user.get("access", {}) or {}
-    if group_id in access.get("group_ids", []):
+    group_ids = normalize_id_list(access.get("group_ids", []))
+    project_ids = normalize_id_list(access.get("project_ids", []))
+    if str(group_id) in group_ids:
         return True
-    if project_id in access.get("project_ids", []):
+    if str(project_id) in project_ids:
         return True
     if project:
         if str(project.get("owner_id")) == current_user_id:
             return True
-        if current_user_id in normalize_id_list(project.get("collaborator_ids")):
+        if current_user_id in normalize_id_list(project.get("collaborator_ids") or []):
             return True
-        if current_user_id in normalize_id_list(project.get("access_user_ids")):
+        if current_user_id in normalize_id_list(project.get("access_user_ids") or project.get("accessUserIds") or []):
+            return True
+        access_users = project.get("access_users") or project.get("accessUsers") or []
+        access_user_ids = [user.get("_id") or user.get("id") for user in access_users if isinstance(user, dict)]
+        if current_user_id in normalize_id_list(access_user_ids):
+            return True
+        collaborators = project.get("collaborators") or []
+        collaborator_ids = [user.get("_id") or user.get("id") for user in collaborators if isinstance(user, dict)]
+        if current_user_id in normalize_id_list(collaborator_ids):
             return True
     return False
 
@@ -479,6 +490,8 @@ async def populate_project(project: dict) -> dict:
             continue
         g = dict(g)
         g["created_at"] = dt_to_iso_z(g.get("created_at"))
+        g["status"] = g.get("status") or ("achieved" if g.get("achieved_at") else "pending")
+        g["achieved_at"] = dt_to_iso_z(g.get("achieved_at"))
         g["achievements"] = g.get("achievements") or []
         normalized_achievements = []
         for r in g["achievements"]:
@@ -887,8 +900,10 @@ async def add_project_goal(
         "created_at": datetime.utcnow(),
         "created_by_id": current_user["_id"],
         "created_by_name": current_user.get("name", "Unknown"),
-        "achievements": [],
-        "achievement_after_days": 7
+        "status": "pending",
+        "achieved_at": None,
+        "achieved_by_id": None,
+        "achieved_by_name": None
     }
     activity = build_project_activity(
         f'Project goal added: "{text}" by {current_user.get("name", "Unknown")}',
@@ -911,7 +926,7 @@ async def add_project_goal_achievement(
     data: dict,
     current_user: dict = Depends(get_current_user)
 ):
-    """Add an achievement (reply) to a project goal; only goal author or admin."""
+    """Add an achievement (reply) to a project goal; retained for backward compatibility."""
     projects = get_projects_collection()
     text = (data.get("text") or "").strip()
     if not text:
@@ -930,18 +945,7 @@ async def add_project_goal_achievement(
             break
     if not target:
         raise HTTPException(status_code=404, detail="Goal not found")
-    is_admin = current_user.get("role") in ["admin", "manager"]
-    if not is_admin and str(target.get("created_by_id")) != str(current_user.get("_id")):
-        raise HTTPException(status_code=403, detail="Only goal owner or admin can add achievement")
-
-    # Enforce 7-day window
-    created_at = target.get("created_at")
-    try:
-        created_dt = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
-    except Exception:
-        created_dt = datetime.utcnow()
-    if created_dt + timedelta(days=7) > datetime.utcnow():
-        raise HTTPException(status_code=400, detail="Achievement logging allowed after 7 days for all users")
+    # Project access users, goal owners, and admins can log achievements.
 
     replies = target.get("achievements") or []
     reply = {
@@ -962,6 +966,62 @@ async def add_project_goal_achievement(
 
     activity = build_project_activity(
         f'Achievement logged for goal "{target.get("text","")}": "{text}" by {current_user.get("name","Unknown")}',
+        current_user
+    )
+    await projects.update_one(
+        {"_id": ObjectId(project_id)},
+        {"$push": {"activity": activity}}
+    )
+
+    project = await projects.find_one({"_id": ObjectId(project_id)})
+    return await populate_project(project)
+
+
+@router.put("/{project_id}/goals/{goal_id}/status")
+async def update_project_goal_status(
+    project_id: str,
+    goal_id: int,
+    data: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Mark a project goal as achieved/pending without reply threads."""
+    projects = get_projects_collection()
+    achieved = bool(data.get("achieved"))
+
+    project = await projects.find_one({"_id": ObjectId(project_id)})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if not has_project_access(current_user, project_id, project.get("group_id", ""), project):
+        raise HTTPException(status_code=403, detail="Not authorized to update goals")
+
+    goals = project.get("weekly_goals") or []
+    target = None
+    for g in goals:
+        if str(g.get("id")) == str(goal_id):
+            target = g
+            break
+    if not target:
+        raise HTTPException(status_code=404, detail="Goal not found")
+
+    if achieved:
+        target["status"] = "achieved"
+        target["achieved_at"] = datetime.utcnow()
+        target["achieved_by_id"] = current_user["_id"]
+        target["achieved_by_name"] = current_user.get("name", "Unknown")
+    else:
+        target["status"] = "pending"
+        target["achieved_at"] = None
+        target["achieved_by_id"] = None
+        target["achieved_by_name"] = None
+
+    await projects.update_one(
+        {"_id": ObjectId(project_id)},
+        {"$set": {"weekly_goals": goals, "updated_at": datetime.utcnow()}}
+    )
+
+    status_label = "Achieved" if achieved else "Pending"
+    activity = build_project_activity(
+        f'Project goal "{target.get("text", "")}" marked {status_label} by {current_user.get("name", "Unknown")}',
         current_user
     )
     await projects.update_one(

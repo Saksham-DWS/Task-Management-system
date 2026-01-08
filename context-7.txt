@@ -94,4 +94,20 @@ Understand what i am thinking , my vision and my intent
 
 
 
-4. Hey i have thought i wanted to remove the report panel from the system from 
+4. Hey i have thought i wanted to remove the Goal & achivement from the task level
+and the lock of +7 day achivement logging as reply under the gaol at project level
+so when project accessed user add a Goal in goal and achievement at project level he will not need to
+wait for 7 days to reply the achivement to that of the goal.
+
+
+
+Understand what I am saying , my intent, my thinking and vision, update code accordingly with best code quality, with error free code, and in sync with frontend UI , backend and the Database ,
+
+Take Step wise approach with logical, practical and adaptive approach and update my code
+
+
+5.  Hey do one think remove the reply based achievement logging on goal & achievement in the 
+'project level instead of it give task like Goal & achievement logging in the project level
+
+enter goal :  "goal has been enter" : [tick]
+by user , x date and time 
