@@ -19,6 +19,7 @@ export const TASK_STATUS_ALIASES = {
   in_progress: TASK_STATUS.IN_PROGRESS,
   on_hold: TASK_STATUS.HOLD,
   hold: TASK_STATUS.HOLD,
+  blocked: TASK_STATUS.HOLD,
   in_review: TASK_STATUS.REVIEW,
   review: TASK_STATUS.REVIEW,
   completed: TASK_STATUS.COMPLETED
@@ -27,7 +28,7 @@ export const TASK_STATUS_ALIASES = {
 export const normalizeTaskStatus = (status) => TASK_STATUS_ALIASES[status] || status
 
 export const TASK_STATUS_LABELS = {
-  [TASK_STATUS.NOT_STARTED]: 'Not Started',
+  [TASK_STATUS.NOT_STARTED]: 'Pre-Task',
   [TASK_STATUS.IN_PROGRESS]: 'In Progress',
   [TASK_STATUS.HOLD]: 'On Hold',
   [TASK_STATUS.REVIEW]: 'Review',

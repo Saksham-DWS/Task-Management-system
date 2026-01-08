@@ -47,6 +47,7 @@ export const canCreateInGroup = (userAccess, groupId) => {
 export const canCreateInProject = (userAccess, projectId, groupId) => {
   if (!userAccess) return false
   if (userAccess.role === USER_ROLES.ADMIN) return true
+  if (userAccess.role === USER_ROLES.MANAGER) return true
   if (getGroupIds(userAccess).includes(groupId)) return true
   return getProjectIds(userAccess).includes(projectId)
 }

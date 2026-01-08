@@ -42,6 +42,40 @@ def normalize_status(status: str) -> str:
         return status
     return STATUS_ALIAS.get(str(status), status)
 
+def normalize_id_list(values) -> list:
+    if not values:
+        return []
+    normalized = []
+    for value in values:
+        if value is None:
+            continue
+        normalized.append(str(value))
+    return normalized
+
+def can_create_task_in_project(current_user: dict, project: dict) -> bool:
+    if not current_user or not project:
+        return False
+    role = current_user.get("role", "user")
+    if role in ["admin", "manager"]:
+        return True
+    access = current_user.get("access", {}) or {}
+    group_id = str(project.get("group_id") or "")
+    project_id = str(project.get("_id") or "")
+    if group_id and group_id in access.get("group_ids", []):
+        return True
+    if project_id and project_id in access.get("project_ids", []):
+        return True
+    current_user_id = str(current_user.get("_id"))
+    if not current_user_id:
+        return False
+    if str(project.get("owner_id") or "") == current_user_id:
+        return True
+    if current_user_id in normalize_id_list(project.get("collaborator_ids") or []):
+        return True
+    if current_user_id in normalize_id_list(project.get("access_user_ids") or project.get("accessUserIds") or []):
+        return True
+    return False
+
 def is_forward_status(current_status: str, next_status: str) -> bool:
     if not current_status or not next_status:
         return True
@@ -99,7 +133,7 @@ def format_email_datetime(value):
 
 def status_label(status: str) -> str:
     labels = {
-        TaskStatus.NOT_STARTED.value: "Not Started",
+        TaskStatus.NOT_STARTED.value: "Pre-Task",
         TaskStatus.IN_PROGRESS.value: "In Progress",
         TaskStatus.HOLD.value: "On Hold",
         TaskStatus.REVIEW.value: "Review",
@@ -620,6 +654,8 @@ async def create_task(
     project = await projects.find_one({"_id": ObjectId(task_data.project_id)})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    if not can_create_task_in_project(current_user, project):
+        raise HTTPException(status_code=403, detail="Not authorized to create tasks in this project")
     if project.get("status") == "completed":
         await projects.update_one(
             {"_id": ObjectId(task_data.project_id)},

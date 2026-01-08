@@ -6,6 +6,7 @@ import { taskService } from '../../services/task.service'
 import ProjectDetailsTable from '../../components/Reports/ProjectDetailsTable'
 import { useAccess } from '../../hooks/useAccess'
 import { useAuthStore } from '../../store/auth.store'
+import { TASK_STATUS_LABELS } from '../../utils/constants'
 
 export default function Reports() {
   const { isManager } = useAccess()
@@ -378,17 +379,10 @@ export default function Reports() {
                 review: 'bg-indigo-500',
                 completed: 'bg-green-500'
               }
-              const labels = {
-                not_started: 'Not Started',
-                in_progress: 'In Progress',
-                hold: 'On Hold',
-                review: 'Review',
-                completed: 'Completed'
-              }
               return (
                 <div key={status}>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">{labels[status]}</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">{TASK_STATUS_LABELS[status] || status}</span>
                     <span className="text-sm font-medium dark:text-gray-300">{count} ({percentage}%)</span>
                   </div>
                   <div className="w-full h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">

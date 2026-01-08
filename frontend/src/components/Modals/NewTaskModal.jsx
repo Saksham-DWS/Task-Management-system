@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { X, Search, ChevronDown, Check } from 'lucide-react'
 import { useUIStore } from '../../store/ui.store'
-import { PRIORITY, TASK_STATUS } from '../../utils/constants'
+import { PRIORITY, TASK_STATUS, TASK_STATUS_LABELS } from '../../utils/constants'
 import { getInitials, getAvatarColor, getTodayInputDate } from '../../utils/helpers'
 
 // Searchable Multi-Select Dropdown Component
@@ -125,7 +125,118 @@ function MultiSelectDropdown({ label, users, selectedIds, onChange, placeholder,
   )
 }
 
-export default function NewTaskModal({ projectId, initialStatus, onSubmit, users = [] }) {
+function ProjectSelectDropdown({ label, projects, value, onChange, placeholder, required }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const dropdownRef = useRef(null)
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const filteredProjects = projects.filter((project) => {
+    const name = project.name?.toLowerCase() || ''
+    const groupName = project.group?.name?.toLowerCase() || ''
+    const query = search.toLowerCase()
+    return name.includes(query) || groupName.includes(query)
+  })
+
+  const selectedProject = projects.find((project) => String(project._id || project.id) === String(value))
+  const selectedLabel = selectedProject ? selectedProject.name : ''
+
+  const handleSelect = (projectId) => {
+    onChange(String(projectId))
+    setIsOpen(false)
+  }
+
+  const handleClear = (event) => {
+    event.stopPropagation()
+    onChange('')
+    setIsOpen(false)
+  }
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+
+      <div
+        onClick={() => setIsOpen(!isOpen)}
+        className="input-field cursor-pointer flex items-center justify-between min-h-[42px]"
+      >
+        <span className={selectedLabel ? 'text-gray-900 dark:text-white' : 'text-gray-400'}>
+          {selectedLabel || placeholder}
+        </span>
+        <div className="flex items-center gap-2">
+          {value && (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X size={14} />
+            </button>
+          )}
+          <ChevronDown size={18} className={`text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        </div>
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
+          <div className="p-2 border-b border-gray-200 dark:border-gray-700">
+            <div className="relative">
+              <Search size={16} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search projects..."
+                className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-primary-500 dark:bg-gray-700 dark:text-white"
+                onClick={(event) => event.stopPropagation()}
+              />
+            </div>
+          </div>
+
+          <div className="max-h-48 overflow-y-auto">
+            {filteredProjects.length > 0 ? (
+              filteredProjects.map((project) => {
+                const projectId = String(project._id || project.id)
+                return (
+                  <div
+                    key={projectId}
+                    onClick={() => handleSelect(projectId)}
+                    className="flex items-center justify-between gap-3 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{project.name}</p>
+                      {project.group?.name && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{project.group.name}</p>
+                      )}
+                    </div>
+                    {projectId === String(value) && (
+                      <Check size={16} className="text-primary-600" />
+                    )}
+                  </div>
+                )
+              })
+            ) : (
+              <p className="text-sm text-gray-500 text-center py-4">No projects found</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function NewTaskModal({ projectId, initialStatus, onSubmit, users = [], projects = [] }) {
   const { closeModal } = useUIStore()
   const todayInputDate = getTodayInputDate()
   const [formData, setFormData] = useState({
@@ -141,6 +252,7 @@ export default function NewTaskModal({ projectId, initialStatus, onSubmit, users
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const showProjectSelect = !projectId
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -150,6 +262,10 @@ export default function NewTaskModal({ projectId, initialStatus, onSubmit, users
     
     if (!formData.title.trim()) {
       setError('Please enter a task title')
+      return
+    }
+    if (showProjectSelect && !formData.projectId) {
+      setError('Please select a project')
       return
     }
 
@@ -169,6 +285,10 @@ export default function NewTaskModal({ projectId, initialStatus, onSubmit, users
   const handleCreateClick = async () => {
     if (!formData.title.trim()) {
       setError('Please enter a task title')
+      return
+    }
+    if (showProjectSelect && !formData.projectId) {
+      setError('Please select a project')
       return
     }
 
@@ -235,6 +355,17 @@ export default function NewTaskModal({ projectId, initialStatus, onSubmit, users
             />
           </div>
 
+          {showProjectSelect && (
+            <ProjectSelectDropdown
+              label="Select Project"
+              projects={projects}
+              value={formData.projectId}
+              onChange={(value) => setFormData({ ...formData, projectId: value })}
+              placeholder="Select projects and search..."
+              required
+            />
+          )}
+
           {/* Assign To - Searchable Multi-Select */}
           <MultiSelectDropdown
             label="Assign To"
@@ -278,10 +409,10 @@ export default function NewTaskModal({ projectId, initialStatus, onSubmit, users
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                 className="input-field"
               >
-                <option value={TASK_STATUS.NOT_STARTED}>Not Started</option>
-                <option value={TASK_STATUS.IN_PROGRESS}>In Progress</option>
-                <option value={TASK_STATUS.HOLD}>On Hold</option>
-                <option value={TASK_STATUS.REVIEW}>Review</option>
+                <option value={TASK_STATUS.NOT_STARTED}>{TASK_STATUS_LABELS[TASK_STATUS.NOT_STARTED]}</option>
+                <option value={TASK_STATUS.IN_PROGRESS}>{TASK_STATUS_LABELS[TASK_STATUS.IN_PROGRESS]}</option>
+                <option value={TASK_STATUS.HOLD}>{TASK_STATUS_LABELS[TASK_STATUS.HOLD]}</option>
+                <option value={TASK_STATUS.REVIEW}>{TASK_STATUS_LABELS[TASK_STATUS.REVIEW]}</option>
               </select>
             </div>
           </div>
