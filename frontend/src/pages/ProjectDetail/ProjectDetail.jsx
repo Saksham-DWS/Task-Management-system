@@ -13,6 +13,7 @@ import KanbanColumn from '../../components/Kanban/KanbanColumn'
 import NewTaskModal from '../../components/Modals/NewTaskModal'
 import EditProjectModal from '../../components/Modals/EditProjectModal'
 import ActivityLogModal from '../../components/Modals/ActivityLogModal'
+import ReasonModal from '../../components/Modals/ReasonModal'
 import ProjectAIInsights from '../../components/AI/ProjectAIInsights'
 import { groupTasksByStatus, calculateProgress, getInitials, getAvatarColor, formatDate, formatDateTime, getRelativeTime } from '../../utils/helpers'
 import { PROJECT_STATUS_COLORS, PROJECT_STATUS_LABELS, TASK_STATUS, TASK_STATUS_LABELS, TASK_STATUS_ORDER, normalizeTaskStatus } from '../../utils/constants'
@@ -40,6 +41,9 @@ export default function ProjectDetail() {
   const [attachments, setAttachments] = useState([])
   const [aiInsight, setAiInsight] = useState(null)
   const [aiLoading, setAiLoading] = useState(false)
+  const [holdReasonModal, setHoldReasonModal] = useState(null)
+  const [holdReasonText, setHoldReasonText] = useState('')
+  const [holdReasonSaving, setHoldReasonSaving] = useState(false)
   const fileInputRef = useRef(null)
 
   useEffect(() => {
@@ -150,12 +154,31 @@ export default function ProjectDetail() {
       if (currentIndex !== -1 && nextIndex !== -1 && nextIndex < currentIndex) {
         return
       }
+      const isReviewer = user?.role === 'admin' || user?.role === 'manager' || draggedTask.assigned_by?._id === user?._id || draggedTask.assigned_by_id === user?._id
+      if (normalizedCurrent === TASK_STATUS.NOT_STARTED) {
+        const allowedNext = isReviewer
+          ? [TASK_STATUS.NOT_STARTED, TASK_STATUS.IN_PROGRESS, TASK_STATUS.HOLD]
+          : [TASK_STATUS.NOT_STARTED, TASK_STATUS.IN_PROGRESS]
+        if (!allowedNext.includes(newStatus)) {
+          return
+        }
+      }
       const canComplete = user?.role === 'admin' || user?.role === 'manager' || draggedTask.assigned_by?._id === user?._id || draggedTask.assigned_by_id === user?._id
       if (newStatus === TASK_STATUS.COMPLETED) {
         if (normalizedCurrent !== TASK_STATUS.REVIEW || !canComplete) {
           return
         }
       }
+    }
+
+    if (newStatus === TASK_STATUS.HOLD && draggedTask) {
+      setHoldReasonText('')
+      setHoldReasonModal({
+        task: draggedTask,
+        status: newStatus,
+        title: 'Log the reason to On Hold this Task'
+      })
+      return
     }
 
     // Optimistic update
@@ -392,6 +415,30 @@ export default function ProjectDetail() {
         delete copy[goalId]
         return copy
       })
+    }
+  }
+
+  const handleHoldReasonConfirm = async (reason) => {
+    if (!holdReasonModal?.task) return
+    setHoldReasonSaving(true)
+    try {
+      const { task, status } = holdReasonModal
+      const updatedTask = await taskService.updateStatus(task._id, status, reason)
+      if (updatedTask) {
+        setTasks((prev) => prev.map((item) => item._id === task._id ? updatedTask : item))
+        const reasonSnippet = reason ? ` Reason: "${reason}"` : ''
+        pushActivityEntry(
+          `Task "${task.title || 'Task'}" status changed to ${TASK_STATUS_LABELS[status] || status} by ${user?.name || 'Unknown'}${reasonSnippet}`
+        )
+      }
+      await refreshProjectActivity()
+    } catch (error) {
+      console.error('Failed to update task status:', error)
+      loadData()
+    } finally {
+      setHoldReasonSaving(false)
+      setHoldReasonModal(null)
+      setHoldReasonText('')
     }
   }
 
@@ -870,6 +917,20 @@ export default function ProjectDetail() {
           title={`${project.name} Activity`}
           activity={activity}
           members={teamMembers}
+        />
+      )}
+
+      {holdReasonModal && (
+        <ReasonModal
+          title={holdReasonModal.title}
+          value={holdReasonText}
+          onChange={setHoldReasonText}
+          onClose={() => {
+            setHoldReasonModal(null)
+            setHoldReasonText('')
+          }}
+          onConfirm={handleHoldReasonConfirm}
+          loading={holdReasonSaving}
         />
       )}
     </div>

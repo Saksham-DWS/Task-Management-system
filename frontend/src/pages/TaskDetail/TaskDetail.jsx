@@ -6,6 +6,7 @@ import { useAuthStore } from '../../store/auth.store'
 import { useAccess } from '../../hooks/useAccess'
 import { taskService } from '../../services/task.service'
 import ConfirmDeleteModal from '../../components/Modals/ConfirmDeleteModal'
+import ReasonModal from '../../components/Modals/ReasonModal'
 import { 
   getInitials, 
   getAvatarColor, 
@@ -40,6 +41,9 @@ export default function TaskDetail() {
   const [submitting, setSubmitting] = useState(false)
   const [attachments, setAttachments] = useState([])
   const [reviewLoading, setReviewLoading] = useState(false)
+  const [reasonModal, setReasonModal] = useState(null)
+  const [reasonText, setReasonText] = useState('')
+  const [reasonSaving, setReasonSaving] = useState(false)
   const [replyDrafts, setReplyDrafts] = useState({})
 
   useEffect(() => {
@@ -66,6 +70,15 @@ export default function TaskDetail() {
     const normalizedTarget = normalizeTaskStatus(newStatus)
     const current = normalizeTaskStatus(task.status)
     if (normalizedTarget === TASK_STATUS.COMPLETED || current === TASK_STATUS.REVIEW) {
+      return
+    }
+    if (normalizedTarget === TASK_STATUS.HOLD) {
+      setReasonText('')
+      setReasonModal({
+        type: 'hold',
+        title: 'Log the reason to On Hold this Task',
+        status: normalizedTarget
+      })
       return
     }
     try {
@@ -100,6 +113,15 @@ export default function TaskDetail() {
   }
 
   const handleReviewDecision = async (decision) => {
+    if (decision === 'decline') {
+      setReasonText('')
+      setReasonModal({
+        type: 'decline',
+        title: 'Log the reason to Decline this Task',
+        action: decision
+      })
+      return
+    }
     setReviewLoading(true)
     try {
       const updated = await taskService.reviewDecision(id, decision)
@@ -108,6 +130,33 @@ export default function TaskDetail() {
       console.error('Failed to update review decision:', error)
     } finally {
       setReviewLoading(false)
+    }
+  }
+
+  const handleReasonConfirm = async (reason) => {
+    if (!reasonModal) return
+    setReasonSaving(true)
+    try {
+      if (reasonModal.type === 'hold') {
+        const updated = await taskService.updateStatus(id, reasonModal.status, reason)
+        if (updated) {
+          setTask(updated)
+        }
+      }
+      if (reasonModal.type === 'decline') {
+        const updated = await taskService.reviewDecision(id, reasonModal.action, reason)
+        if (updated) {
+          setTask(updated)
+        }
+      }
+      const refreshedComments = await taskService.getComments(id)
+      setComments(refreshedComments)
+      setReasonModal(null)
+      setReasonText('')
+    } catch (error) {
+      console.error('Failed to save reason:', error)
+    } finally {
+      setReasonSaving(false)
     }
   }
 
@@ -223,11 +272,26 @@ export default function TaskDetail() {
     const tb = new Date(b.timestamp || b.time || b.date || 0).getTime()
     return tb - ta
   }).slice(0, 20)
-  const currentStatusIndex = TASK_STATUS_ORDER.indexOf(normalizedStatus)
-  const rawStatusOptions = currentStatusIndex === -1
-    ? TASK_STATUS_ORDER
-    : TASK_STATUS_ORDER.slice(currentStatusIndex)
-  const allowedStatusOptions = rawStatusOptions.filter((value) => {
+  const allowedStatusOptions = (() => {
+    if (normalizedStatus === TASK_STATUS.NOT_STARTED) {
+      return isReviewer
+        ? [TASK_STATUS.NOT_STARTED, TASK_STATUS.IN_PROGRESS, TASK_STATUS.HOLD]
+        : [TASK_STATUS.NOT_STARTED, TASK_STATUS.IN_PROGRESS]
+    }
+    if (normalizedStatus === TASK_STATUS.IN_PROGRESS) {
+      return [TASK_STATUS.IN_PROGRESS, TASK_STATUS.HOLD, TASK_STATUS.REVIEW]
+    }
+    if (normalizedStatus === TASK_STATUS.HOLD) {
+      return [TASK_STATUS.HOLD, TASK_STATUS.REVIEW]
+    }
+    if (normalizedStatus === TASK_STATUS.REVIEW) {
+      return [TASK_STATUS.REVIEW, TASK_STATUS.COMPLETED]
+    }
+    if (normalizedStatus === TASK_STATUS.COMPLETED) {
+      return [TASK_STATUS.COMPLETED]
+    }
+    return TASK_STATUS_ORDER
+  })().filter((value) => {
     if (value === TASK_STATUS.COMPLETED) {
       return normalizedStatus === TASK_STATUS.COMPLETED
     }
@@ -681,6 +745,20 @@ export default function TaskDetail() {
           message={`Are you sure you want to delete "${task.title}"? This action cannot be undone.`}
           onConfirm={handleDelete}
           onClose={() => closeModal()}
+        />
+      )}
+
+      {reasonModal && (
+        <ReasonModal
+          title={reasonModal.title}
+          value={reasonText}
+          onChange={setReasonText}
+          onClose={() => {
+            setReasonModal(null)
+            setReasonText('')
+          }}
+          onConfirm={handleReasonConfirm}
+          loading={reasonSaving}
         />
       )}
     </div>

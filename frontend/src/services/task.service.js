@@ -73,8 +73,12 @@ export const taskService = {
     return response.data
   },
 
-  updateStatus: async (id, status) => {
-    const response = await api.put(`/tasks/${id}/status`, { status })
+  updateStatus: async (id, status, reason) => {
+    const payload = { status }
+    if (reason) {
+      payload.reason = reason
+    }
+    const response = await api.put(`/tasks/${id}/status`, payload)
     return response.data
   },
 
@@ -138,8 +142,12 @@ export const taskService = {
     return response.data
   },
 
-  reviewDecision: async (id, action) => {
-    const response = await api.put(`/tasks/${id}/review`, { action })
+  reviewDecision: async (id, action, reason) => {
+    const payload = { action }
+    if (reason) {
+      payload.reason = reason
+    }
+    const response = await api.put(`/tasks/${id}/review`, payload)
     return normalizeTask(response.data)
   }
 }

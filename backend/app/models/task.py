@@ -69,6 +69,7 @@ class TaskUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     status: Optional[TaskStatus] = None
+    reason: Optional[str] = None
     priority: Optional[Priority] = None
     assignee_ids: Optional[List[str]] = None
     collaborator_ids: Optional[List[str]] = None

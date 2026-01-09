@@ -86,6 +86,25 @@ def is_forward_status(current_status: str, next_status: str) -> bool:
     except ValueError:
         return True
 
+def is_step_transition_allowed(
+    current_status: str,
+    next_status: str,
+    allow_hold_from_pre: bool = False
+) -> bool:
+    if not current_status or not next_status:
+        return True
+    current_normalized = normalize_status(current_status)
+    next_normalized = normalize_status(next_status)
+    if current_normalized == TaskStatus.NOT_STARTED.value:
+        allowed = [
+            TaskStatus.NOT_STARTED.value,
+            TaskStatus.IN_PROGRESS.value
+        ]
+        if allow_hold_from_pre:
+            allowed.append(TaskStatus.HOLD.value)
+        return next_normalized in allowed
+    return True
+
 def activity_timestamp() -> str:
     return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
@@ -149,6 +168,30 @@ def build_activity_entry(description: str, current_user: dict) -> dict:
         "user_id": current_user["_id"],
         "user": current_user.get("name", "Unknown")
     }
+
+def reason_preview(reason: str, limit: int = 120) -> str:
+    cleaned = (reason or "").strip()
+    if not cleaned:
+        return ""
+    if len(cleaned) > limit:
+        return cleaned[:limit - 3] + "..."
+    return cleaned
+
+async def log_reason_comment(task_id: str, reason: str, current_user: dict, prefix: str) -> None:
+    cleaned = (reason or "").strip()
+    if not cleaned:
+        return
+    comments = get_comments_collection()
+    content = f"{prefix}: {cleaned}" if prefix else cleaned
+    comment_dict = {
+        "content": content,
+        "task_id": task_id,
+        "user_id": current_user["_id"],
+        "attachments": [],
+        "created_at": datetime.utcnow(),
+        "parent_id": None
+    }
+    await comments.insert_one(comment_dict)
 
 
 def unique_participants(task: dict) -> set:
@@ -635,7 +678,6 @@ async def get_tasks_by_project(
 async def get_task(task_id: str, current_user: dict = Depends(get_current_user)):
     tasks = get_tasks_collection()
     task = await tasks.find_one({"_id": ObjectId(task_id)})
-    
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     
@@ -788,6 +830,8 @@ async def update_task(
     if not incoming:
         raise HTTPException(status_code=400, detail="No data to update")
     current_status = normalize_status(existing.get("status"))
+    reason = (incoming.get("reason") or "").strip()
+    incoming.pop("reason", None)
 
     def normalize_datetime(value):
         if value is None:
@@ -823,17 +867,27 @@ async def update_task(
         new_status = normalize_status(normalize_enum(incoming["status"]))
         if not is_forward_status(existing.get("status"), new_status):
             raise HTTPException(status_code=400, detail="Cannot move task back to a previous stage")
+        allow_hold_from_pre = await is_task_reviewer(existing, current_user)
+        if not is_step_transition_allowed(existing.get("status"), new_status, allow_hold_from_pre):
+            raise HTTPException(status_code=400, detail="Task must move to In Progress before On Hold or Review")
         if new_status == TaskStatus.COMPLETED.value and not await is_task_reviewer(existing, current_user):
             raise HTTPException(status_code=403, detail="Only reviewers can mark tasks as completed")
         if new_status == TaskStatus.COMPLETED.value and current_status != TaskStatus.REVIEW.value:
             raise HTTPException(status_code=400, detail="Task must be in review before completion")
         if existing.get("status") != new_status:
+            if new_status == TaskStatus.HOLD.value and not reason:
+                raise HTTPException(status_code=400, detail="Reason is required to put task on hold")
             update_data["status"] = new_status
             status_changed_to = new_status
             if new_status == TaskStatus.COMPLETED.value:
                 update_data["completed_at"] = datetime.utcnow()
-            add_activity(f"Status changed to {status_label(new_status)} by {actor_name}")
-            add_project_activity(f"Task \"{task_title}\" status changed to {status_label(new_status)} by {actor_name}")
+            reason_note = (
+                f' Reason: "{reason_preview(reason)}"'
+                if new_status == TaskStatus.HOLD.value and reason
+                else ""
+            )
+            add_activity(f"Status changed to {status_label(new_status)} by {actor_name}{reason_note}")
+            add_project_activity(f"Task \"{task_title}\" status changed to {status_label(new_status)} by {actor_name}{reason_note}")
 
     # Priority
     if "priority" in incoming:
@@ -977,10 +1031,11 @@ async def update_task(
             email_body=email_body
         )
     if status_changed_to:
+        reason_note = f' Reason: "{reason_preview(reason)}"' if status_changed_to == TaskStatus.HOLD.value and reason else ""
         await notify_task_change(
             task,
             current_user,
-            f"Task \"{task_title}\" moved to {status_label(status_changed_to)} by {actor_name}",
+            f"Task \"{task_title}\" moved to {status_label(status_changed_to)} by {actor_name}{reason_note}",
             status=status_changed_to
         )
         await check_project_auto_complete(task["project_id"])
@@ -995,6 +1050,7 @@ async def update_task_status(
 ):
     tasks = get_tasks_collection()
     new_status = normalize_status(data.get("status"))
+    reason = (data.get("reason") or "").strip()
 
     existing = await tasks.find_one({"_id": ObjectId(task_id)})
     if not existing:
@@ -1004,6 +1060,11 @@ async def update_task_status(
         return await populate_task(existing)
     if not is_forward_status(current_status, new_status):
         raise HTTPException(status_code=400, detail="Cannot move task back to a previous stage")
+    allow_hold_from_pre = await is_task_reviewer(existing, current_user)
+    if not is_step_transition_allowed(current_status, new_status, allow_hold_from_pre):
+        raise HTTPException(status_code=400, detail="Task must move to In Progress before On Hold or Review")
+    if new_status == TaskStatus.HOLD.value and not reason:
+        raise HTTPException(status_code=400, detail="Reason is required to put task on hold")
     if new_status == TaskStatus.COMPLETED.value and not await is_task_reviewer(existing, current_user):
         raise HTTPException(status_code=403, detail="Only reviewers can mark tasks as completed")
     if new_status == TaskStatus.COMPLETED.value and current_status != TaskStatus.REVIEW.value:
@@ -1013,8 +1074,13 @@ async def update_task_status(
     if new_status == TaskStatus.COMPLETED.value:
         update_data["completed_at"] = datetime.utcnow()
     
+    reason_note = (
+        f' Reason: "{reason_preview(reason)}"'
+        if new_status == TaskStatus.HOLD.value and reason
+        else ""
+    )
     activity = build_activity_entry(
-        f"Status changed to {status_label(new_status)} by {current_user.get('name', 'Unknown')}",
+        f"Status changed to {status_label(new_status)} by {current_user.get('name', 'Unknown')}{reason_note}",
         current_user
     )
     
@@ -1028,7 +1094,7 @@ async def update_task_status(
 
     project_description = (
         f"Task \"{existing.get('title', 'Task')}\" status changed to {status_label(new_status)} "
-        f"by {current_user.get('name', 'Unknown')}"
+        f"by {current_user.get('name', 'Unknown')}{reason_note}"
     )
     await push_project_activity(
         existing.get("project_id"),
@@ -1036,11 +1102,13 @@ async def update_task_status(
     )
 
     task = await tasks.find_one({"_id": ObjectId(task_id)})
+    if new_status == TaskStatus.HOLD.value and reason:
+        await log_reason_comment(task_id, reason, current_user, "On Hold reason")
 
     await notify_task_change(
         task,
         current_user,
-        f"Task \"{existing.get('title', 'Task')}\" moved to {status_label(new_status)} by {current_user.get('name', 'Unknown')}",
+        f"Task \"{existing.get('title', 'Task')}\" moved to {status_label(new_status)} by {current_user.get('name', 'Unknown')}{reason_note}",
         status=new_status
     )
 
@@ -1059,8 +1127,11 @@ async def review_task(
     """Allow reviewers to accept or decline work submitted for review."""
     tasks = get_tasks_collection()
     action = (data.get("action") or "").lower()
+    reason = (data.get("reason") or "").strip()
     if action not in ["accept", "decline"]:
         raise HTTPException(status_code=400, detail="Invalid review action")
+    if action == "decline" and not reason:
+        raise HTTPException(status_code=400, detail="Reason is required to decline a task")
 
     existing = await tasks.find_one({"_id": ObjectId(task_id)})
     if not existing:
@@ -1085,8 +1156,9 @@ async def review_task(
         new_status = TaskStatus.IN_PROGRESS.value
         updates["status"] = new_status
         updates["completed_at"] = None
-        activity_message = f"Task sent back to In Progress by {actor_name}"
-        project_message = f"Task \"{existing.get('title', 'Task')}\" declined and moved to In Progress by {actor_name}"
+        reason_note = f' Reason: "{reason_preview(reason)}"' if reason else ""
+        activity_message = f"Task sent back to In Progress by {actor_name}{reason_note}"
+        project_message = f"Task \"{existing.get('title', 'Task')}\" declined and moved to In Progress by {actor_name}{reason_note}"
 
     await tasks.update_one(
         {"_id": ObjectId(task_id)},
@@ -1102,6 +1174,8 @@ async def review_task(
     )
 
     task = await tasks.find_one({"_id": ObjectId(task_id)})
+    if action == "decline" and reason:
+        await log_reason_comment(task_id, reason, current_user, "Decline reason")
     await notify_task_change(
         task,
         current_user,
