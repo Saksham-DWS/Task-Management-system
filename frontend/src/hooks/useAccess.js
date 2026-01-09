@@ -38,8 +38,8 @@ export const useAccess = () => {
       getAccessLevel(access, groupId, projectId, taskId),
     
     // Check if admin
-    isAdmin: () => user?.role === 'admin',
-    isManager: () => user?.role === 'manager' || user?.role === 'admin',
+    isAdmin: () => user?.role === 'admin' || user?.role === 'super_admin',
+    isManager: () => user?.role === 'manager' || user?.role === 'admin' || user?.role === 'super_admin',
     
     // Raw access data
     userAccess: access

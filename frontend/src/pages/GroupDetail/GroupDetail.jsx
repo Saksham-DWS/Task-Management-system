@@ -27,7 +27,7 @@ export default function GroupDetail() {
   const [accessDenied, setAccessDenied] = useState(false)
   const [users, setUsers] = useState([])
 
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
 
   useEffect(() => {
     loadData()

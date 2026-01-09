@@ -242,7 +242,7 @@ async def populate_projects_bulk(projects: list) -> list:
 
 def has_group_access(current_user: dict, group_id: str) -> bool:
     role = current_user.get("role", "user")
-    if role in ["admin", "manager"]:
+    if role in ["admin", "manager", "super_admin"]:
         return True
     access = current_user.get("access", {}) or {}
     group_ids = normalize_id_list(access.get("group_ids", []))
@@ -250,7 +250,7 @@ def has_group_access(current_user: dict, group_id: str) -> bool:
 
 def has_project_access(current_user: dict, project_id: str, group_id: str, project: dict | None = None) -> bool:
     role = current_user.get("role", "user")
-    if role in ["admin", "manager"]:
+    if role in ["admin", "manager", "super_admin"]:
         return True
     current_user_id = str(current_user.get("_id"))
     access = current_user.get("access", {}) or {}
@@ -513,7 +513,7 @@ async def get_projects(current_user: dict = Depends(get_current_user)):
     user_role = current_user.get("role", "user")
     user_access = current_user.get("access", {})
     
-    if user_role in ["admin", "manager"]:
+    if user_role in ["admin", "manager", "super_admin"]:
         cursor = projects.find({})
     else:
         group_ids = user_access.get("group_ids", [])
@@ -587,7 +587,7 @@ async def create_project(
     group = await groups.find_one({"_id": ObjectId(group_id)})
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
-    if current_user.get("role") not in ["admin", "manager"] and not has_group_access(current_user, group_id):
+    if current_user.get("role") not in ["admin", "manager", "super_admin"] and not has_group_access(current_user, group_id):
         raise HTTPException(status_code=403, detail="Not authorized to create a project in this group")
 
     # Safely pick access/collaborators from either snake_case or camelCase

@@ -10,6 +10,7 @@ const normalizeRole = (role) => (role === USER_ROLES.MANAGER ? USER_ROLES.ADMIN 
 
 const roleLabel = (role) => {
   const normalized = normalizeRole(role)
+  if (normalized === USER_ROLES.SUPER_ADMIN) return 'Super Admin'
   return normalized === USER_ROLES.ADMIN ? 'Admin' : 'User'
 }
 
@@ -31,7 +32,9 @@ export default function TeamsAccess() {
   const [notificationPrefs, setNotificationPrefs] = useState(null)
   const [savingPrefs, setSavingPrefs] = useState(false)
 
-  const isAdmin = currentUser?.role === USER_ROLES.ADMIN
+  const isAdmin = [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN].includes(currentUser?.role)
+  const isSuperAdmin = currentUser?.role === USER_ROLES.SUPER_ADMIN
+  const canManageUser = (user) => isSuperAdmin || user?.role !== USER_ROLES.SUPER_ADMIN
 
   useEffect(() => {
     loadData()
@@ -87,6 +90,10 @@ export default function TeamsAccess() {
   }
 
   const handleOpenEdit = (user) => {
+    if (!canManageUser(user)) {
+      alert('Only super admins can edit super admin accounts.')
+      return
+    }
     const normalizedRole = normalizeRole(user.role)
     setSelectedUser(user)
     setEditUser({
@@ -194,6 +201,8 @@ export default function TeamsAccess() {
 
   const getRoleBadgeClass = (role) => {
     switch (normalizeRole(role)) {
+      case USER_ROLES.SUPER_ADMIN:
+        return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
       case USER_ROLES.ADMIN:
         return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
       default:
@@ -312,25 +321,26 @@ export default function TeamsAccess() {
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          handleOpenEdit(user)
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
-                      >
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        handleOpenEdit(user)
+                      }}
+                      disabled={!canManageUser(user)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    >
                         <Edit2 size={14} />
                         Edit
                       </button>
-                      <button
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          setSelectedUser(user)
-                          setShowDeleteConfirm(true)
-                        }}
-                        disabled={user._id === currentUser?._id}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setSelectedUser(user)
+                        setShowDeleteConfirm(true)
+                      }}
+                      disabled={user._id === currentUser?._id || !canManageUser(user)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
                         <Trash2 size={14} />
                         Delete
                       </button>
@@ -377,14 +387,16 @@ export default function TeamsAccess() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleOpenEdit(selectedUser)}
-                      className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500"
+                      disabled={!canManageUser(selectedUser)}
+                      className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Edit user"
                     >
                       <Edit2 size={18} />
                     </button>
                     <button
                       onClick={() => setShowDeleteConfirm(true)}
-                      className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600"
+                      disabled={!canManageUser(selectedUser)}
+                      className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Delete user"
                     >
                       <Trash2 size={18} />
@@ -558,6 +570,7 @@ export default function TeamsAccess() {
                 >
                   <option value={USER_ROLES.USER}>User</option>
                   <option value={USER_ROLES.ADMIN}>Admin</option>
+                  {isSuperAdmin && <option value={USER_ROLES.SUPER_ADMIN}>Super Admin</option>}
                 </select>
               </div>
               <div className="flex gap-3 pt-2">
@@ -629,6 +642,7 @@ export default function TeamsAccess() {
                 >
                   <option value={USER_ROLES.USER}>User</option>
                   <option value={USER_ROLES.ADMIN}>Admin</option>
+                  {isSuperAdmin && <option value={USER_ROLES.SUPER_ADMIN}>Super Admin</option>}
                 </select>
               </div>
               <div className="flex gap-3 pt-2">

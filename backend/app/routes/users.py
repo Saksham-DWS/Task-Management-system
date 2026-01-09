@@ -46,6 +46,9 @@ async def create_user(
     if len(user_data.password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
 
+    if user_data.role.value == "super_admin" and current_user.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Not authorized to create super admin users")
+
     user_dict = {
         "name": user_data.name,
         "email": user_data.email,
@@ -73,12 +76,12 @@ async def update_user(
     users = get_users_collection()
     
     # Check permissions
-    if current_user["_id"] != user_id and current_user.get("role") not in ["admin", "manager"]:
+    if current_user["_id"] != user_id and current_user.get("role") not in ["admin", "manager", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     
     update_data = {k: v for k, v in user_data.dict().items() if v is not None}
     if "role" in update_data:
-        if current_user.get("role") != "admin":
+        if current_user.get("role") not in ["admin", "super_admin"]:
             raise HTTPException(status_code=403, detail="Not authorized to change role")
         update_data.pop("role")
 
@@ -115,11 +118,17 @@ async def update_user_role(
     current_user: dict = Depends(require_role(["admin"]))
 ):
     users = get_users_collection()
-    
+
     new_role = role_data.get("role")
-    if new_role not in ["admin", "manager", "user"]:
+    if new_role not in ["admin", "manager", "user", "super_admin"]:
         raise HTTPException(status_code=400, detail="Invalid role")
-    
+    if new_role == "super_admin" and current_user.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Not authorized to assign super admin role")
+    if current_user.get("role") != "super_admin":
+        existing = await users.find_one({"_id": ObjectId(user_id)})
+        if existing and existing.get("role") == "super_admin":
+            raise HTTPException(status_code=403, detail="Not authorized to change super admin role")
+
     result = await users.update_one(
         {"_id": ObjectId(user_id)},
         {"$set": {"role": new_role, "updated_at": datetime.utcnow()}}
@@ -222,12 +231,18 @@ async def delete_user(
     user = await users.find_one({"_id": ObjectId(user_id)})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if user.get("role") == "super_admin" and current_user.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Not authorized to delete a super admin")
     
     # Don't allow deleting the last admin
     if user.get("role") == "admin":
         admin_count = await users.count_documents({"role": "admin"})
         if admin_count <= 1:
             raise HTTPException(status_code=400, detail="Cannot delete the last admin")
+    if user.get("role") == "super_admin":
+        super_admin_count = await users.count_documents({"role": "super_admin"})
+        if super_admin_count <= 1:
+            raise HTTPException(status_code=400, detail="Cannot delete the last super admin")
     
     await users.delete_one({"_id": ObjectId(user_id)})
     return {"message": "User deleted successfully"}
@@ -243,7 +258,7 @@ async def change_user_password(
     users = get_users_collection()
     
     # Check permissions
-    if current_user["_id"] != user_id and current_user.get("role") != "admin":
+    if current_user["_id"] != user_id and current_user.get("role") not in ["admin", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     
     new_password = password_data.get("new_password")

@@ -21,7 +21,7 @@ def _normalize_id_list(ids):
 
 def _has_project_access(current_user: dict, project: dict) -> bool:
     role = current_user.get("role", "user")
-    if role in ["admin", "manager"]:
+    if role in ["admin", "manager", "super_admin"]:
         return True
     current_user_id = str(current_user.get("_id"))
     access = current_user.get("access", {}) or {}

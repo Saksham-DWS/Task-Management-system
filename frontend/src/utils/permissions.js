@@ -15,13 +15,13 @@ const getTaskIds = (userAccess) => (
 
 export const canViewGroup = (userAccess, groupId) => {
   if (!userAccess) return false
-  return getGroupIds(userAccess).includes(groupId) || userAccess.role === USER_ROLES.ADMIN
+  return getGroupIds(userAccess).includes(groupId) || [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN].includes(userAccess.role)
 }
 
 // Check if user has project-level access
 export const canViewProject = (userAccess, projectId, groupId) => {
   if (!userAccess) return false
-  if (userAccess.role === USER_ROLES.ADMIN) return true
+  if ([USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN].includes(userAccess.role)) return true
   if (getGroupIds(userAccess).includes(groupId)) return true
   return getProjectIds(userAccess).includes(projectId)
 }
@@ -29,7 +29,7 @@ export const canViewProject = (userAccess, projectId, groupId) => {
 // Check if user has task-level access
 export const canViewTask = (userAccess, taskId, projectId, groupId) => {
   if (!userAccess) return false
-  if (userAccess.role === USER_ROLES.ADMIN) return true
+  if ([USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN].includes(userAccess.role)) return true
   if (getGroupIds(userAccess).includes(groupId)) return true
   if (getProjectIds(userAccess).includes(projectId)) return true
   return getTaskIds(userAccess).includes(taskId)
@@ -38,7 +38,7 @@ export const canViewTask = (userAccess, taskId, projectId, groupId) => {
 // Check if user can create in group
 export const canCreateInGroup = (userAccess, groupId) => {
   if (!userAccess) return false
-  if (userAccess.role === USER_ROLES.ADMIN) return true
+  if ([USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN].includes(userAccess.role)) return true
   if (userAccess.role === USER_ROLES.MANAGER) return true
   return getGroupIds(userAccess).includes(groupId)
 }
@@ -46,7 +46,7 @@ export const canCreateInGroup = (userAccess, groupId) => {
 // Check if user can create in project
 export const canCreateInProject = (userAccess, projectId, groupId) => {
   if (!userAccess) return false
-  if (userAccess.role === USER_ROLES.ADMIN) return true
+  if ([USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN].includes(userAccess.role)) return true
   if (userAccess.role === USER_ROLES.MANAGER) return true
   if (getGroupIds(userAccess).includes(groupId)) return true
   return getProjectIds(userAccess).includes(projectId)
@@ -55,7 +55,7 @@ export const canCreateInProject = (userAccess, projectId, groupId) => {
 // Check if user can edit task
 export const canEditTask = (userAccess, task) => {
   if (!userAccess) return false
-  if (userAccess.role === USER_ROLES.ADMIN) return true
+  if ([USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN].includes(userAccess.role)) return true
   if (getGroupIds(userAccess).includes(task.groupId)) return true
   if (getProjectIds(userAccess).includes(task.projectId)) return true
   const userId = userAccess.userId
@@ -69,7 +69,7 @@ export const canEditTask = (userAccess, task) => {
 // Check if user can delete task
 export const canDeleteTask = (userAccess, task) => {
   if (!userAccess) return false
-  if (userAccess.role === USER_ROLES.ADMIN) return true
+  if ([USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN].includes(userAccess.role)) return true
   if (getGroupIds(userAccess).includes(task.groupId)) return true
   return getProjectIds(userAccess).includes(task.projectId)
 }
@@ -77,12 +77,13 @@ export const canDeleteTask = (userAccess, task) => {
 // Check if user can manage team/access
 export const canManageAccess = (userAccess) => {
   if (!userAccess) return false
-  return userAccess.role === USER_ROLES.ADMIN || userAccess.role === USER_ROLES.MANAGER
+  return [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.MANAGER].includes(userAccess.role)
 }
 
 // Get user's access level for display
 export const getAccessLevel = (userAccess, groupId, projectId, taskId) => {
   if (!userAccess) return null
+  if (userAccess.role === USER_ROLES.SUPER_ADMIN) return 'super_admin'
   if (userAccess.role === USER_ROLES.ADMIN) return 'admin'
   if (getGroupIds(userAccess).includes(groupId)) return 'group'
   if (getProjectIds(userAccess).includes(projectId)) return 'project'

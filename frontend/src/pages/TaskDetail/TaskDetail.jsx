@@ -259,10 +259,17 @@ export default function TaskDetail() {
 
   const groupId = task.group_id || task.groupId
   const projectId = task.project_id || task.projectId
+  const userId = user?._id || user?.id
   const canSeeGroup = canViewGroup(groupId)
   const canSeeProject = canViewProject(projectId, groupId)
   const normalizedStatus = normalizeTaskStatus(task.status)
-  const isReviewer = user?.role === 'admin' || user?.role === 'manager' || task.assigned_by?._id === user?._id || task.assigned_by_id === user?._id
+  const isAssignee = [
+    ...(task.assignee_ids || task.assigneeIds || []),
+    ...((task.assignees || []).map((assignee) => assignee?._id || assignee?.id))
+  ]
+    .map((value) => String(value || ''))
+    .includes(String(userId || ''))
+  const isReviewer = user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'manager' || task.assigned_by?._id === user?._id || task.assigned_by_id === user?._id
   const isAwaitingReview = normalizedStatus === TASK_STATUS.REVIEW
   const statusClass = TASK_STATUS_COLORS[normalizedStatus] || 'bg-gray-100 text-gray-700'
   const priorityClass = PRIORITY_COLORS[task.priority] || 'bg-gray-100 text-gray-700'
@@ -272,6 +279,13 @@ export default function TaskDetail() {
     const tb = new Date(b.timestamp || b.time || b.date || 0).getTime()
     return tb - ta
   }).slice(0, 20)
+  const getStatusLabel = (value) => {
+    if (value === TASK_STATUS.REVIEW && isAssignee) {
+      return 'Complete'
+    }
+    return TASK_STATUS_LABELS[value] || value
+  }
+
   const allowedStatusOptions = (() => {
     if (normalizedStatus === TASK_STATUS.NOT_STARTED) {
       return isReviewer
@@ -450,7 +464,7 @@ export default function TaskDetail() {
                 >
                   {allowedStatusOptions.map((value) => (
                     <option key={value} value={value}>
-                      {TASK_STATUS_LABELS[value]}
+                      {getStatusLabel(value)}
                     </option>
                   ))}
                 </select>

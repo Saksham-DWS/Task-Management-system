@@ -80,6 +80,7 @@ export const PROJECT_STATUS_COLORS = {
 }
 
 export const USER_ROLES = {
+  SUPER_ADMIN: 'super_admin',
   ADMIN: 'admin',
   MANAGER: 'manager',
   USER: 'user'

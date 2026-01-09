@@ -56,7 +56,7 @@ def can_create_task_in_project(current_user: dict, project: dict) -> bool:
     if not current_user or not project:
         return False
     role = current_user.get("role", "user")
-    if role in ["admin", "manager"]:
+    if role in ["admin", "manager", "super_admin"]:
         return True
     access = current_user.get("access", {}) or {}
     group_id = str(project.get("group_id") or "")
@@ -263,14 +263,14 @@ async def is_task_reviewer(task: dict, current_user: dict) -> bool:
                 return True
     except Exception:
         pass
-    return current_user.get("role") in ["admin", "manager"]
+    return current_user.get("role") in ["admin", "manager", "super_admin"]
 
 
 def can_log_goal(task: dict, current_user: dict) -> bool:
     """Allow goal logging by assignees (doers) and admins."""
     if not current_user or not task:
         return False
-    if current_user.get("role") == "admin":
+    if current_user.get("role") in ["admin", "super_admin"]:
         return True
     user_id = str(current_user.get("_id"))
     assignees = task.get("assignee_ids") or []
@@ -622,7 +622,7 @@ async def populate_task(task: dict) -> dict:
 async def get_tasks(current_user: dict = Depends(get_current_user)):
     tasks = get_tasks_collection()
     role = current_user.get("role", "user")
-    if role in ["admin", "manager"]:
+    if role in ["admin", "manager", "super_admin"]:
         cursor = tasks.find({})
     else:
         user_id = current_user["_id"]
@@ -645,6 +645,12 @@ async def get_my_tasks(current_user: dict = Depends(get_current_user)):
     """Get tasks assigned to current user, sorted by newest first"""
     tasks = get_tasks_collection()
     user_id = current_user["_id"]
+    if current_user.get("role") == "super_admin":
+        cursor = tasks.find({}).sort("created_at", -1)
+        result = []
+        async for task in cursor:
+            result.append(task)
+        return await populate_tasks_bulk(result)
     
     cursor = tasks.find({
         "$or": [

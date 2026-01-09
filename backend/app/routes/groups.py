@@ -25,7 +25,7 @@ async def get_project_counts_for_groups(group_ids: List[str]) -> dict:
 
 def has_group_access(current_user: dict, group_id: str) -> bool:
     role = current_user.get("role", "user")
-    if role in ["admin", "manager"]:
+    if role in ["admin", "manager", "super_admin"]:
         return True
     access = current_user.get("access", {}) or {}
     return group_id in access.get("group_ids", [])
@@ -49,7 +49,7 @@ async def get_groups(current_user: dict = Depends(get_current_user)):
     user_access = current_user.get("access", {})
     
     # Admins and managers see all groups
-    if user_role in ["admin", "manager"]:
+    if user_role in ["admin", "manager", "super_admin"]:
         cursor = groups.find({})
     else:
         # Users see only groups they have access to

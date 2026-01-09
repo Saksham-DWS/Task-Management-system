@@ -39,6 +39,12 @@ async def register(
         )
 
     # Create user
+    if user_data.role.value == "super_admin" and _current_user.get("role") != "super_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to create super admin users"
+        )
+
     user_dict = {
         "name": user_data.name,
         "email": user_data.email,

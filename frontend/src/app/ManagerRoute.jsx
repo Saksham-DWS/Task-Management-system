@@ -3,7 +3,7 @@ import { useAuthStore } from '../store/auth.store'
 
 export default function ManagerRoute({ children }) {
   const { isAuthenticated, user } = useAuthStore()
-  const isManager = user?.role === 'manager' || user?.role === 'admin'
+  const isManager = user?.role === 'manager' || user?.role === 'admin' || user?.role === 'super_admin'
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />

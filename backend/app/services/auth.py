@@ -11,6 +11,7 @@ from ..database import get_users_collection
 from ..models import TokenData, UserResponse
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
+SUPER_ADMIN_EMAIL = "admin@dws.com"
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -60,7 +61,14 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     user = await users.find_one({"_id": ObjectId(token_data.user_id)})
     if user is None:
         raise credentials_exception
-    
+    email = str(user.get("email", "")).lower()
+    if email == SUPER_ADMIN_EMAIL and user.get("role") != "super_admin":
+        await users.update_one(
+            {"_id": ObjectId(token_data.user_id)},
+            {"$set": {"role": "super_admin"}}
+        )
+        user["role"] = "super_admin"
+
     user["_id"] = str(user["_id"])
     return user
 
@@ -71,6 +79,8 @@ async def get_current_active_user(current_user: dict = Depends(get_current_user)
 
 def require_role(allowed_roles: list):
     async def role_checker(current_user: dict = Depends(get_current_user)):
+        if current_user.get("role") == "super_admin":
+            return current_user
         if current_user.get("role") not in allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

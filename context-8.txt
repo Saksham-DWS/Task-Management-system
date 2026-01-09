@@ -90,3 +90,24 @@ and the same when assinged by user log the reason of task decline and click acce
 task level comment , and the task has been decline and moved back to 'In Progess' and the task level activity log the actions , also project level actvity log also log the action as like before,
 
 Task level actvity log and project level activity log log the each and every action accordingly.
+
+
+
+2. Hey i have thought i wanted to make the "review" text in the task level drop down 
+to seen by user is name "Complete" but the logic is still same of "review" in real the 
+status is "review" but in real the status drop down name will be "Review" but the text showing to 
+user is "Complete", in the full project 
+
+3. Hey i have thought i wanted to make a "Super Admin" and the functionality of super admin is same as admin
+but there will be an exception , super admin can see all tasks data within the its My Work Panel
+whatevere tasks are present in the system all tasks, 
+ 
+and when super admin try to make a new user id he is the only one can see super admin drop down in account creation
+so super admin can create Another super admin but normal admin cannot create a super admin id ,
+
+the intial super admin we will make is : admin@dws.com  email id, 
+
+and this mail id will be super admin and super admin can see all tasks in the MY Task panel who are present with in the system
+ the system which are currently going on , presnt, future, and past tasks of all users tasks under its my work panel.
+
+

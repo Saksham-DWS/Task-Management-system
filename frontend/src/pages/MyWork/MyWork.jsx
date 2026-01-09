@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ListTodo, Clock, PauseCircle, CheckCircle, Plus } from 'lucide-react'
 import { useUIStore } from '../../store/ui.store'
+import { useAuthStore } from '../../store/auth.store'
 import { useAccess } from '../../hooks/useAccess'
 import { taskService } from '../../services/task.service'
 import { projectService } from '../../services/project.service'
@@ -13,6 +14,7 @@ import { TASK_STATUS, TASK_STATUS_LABELS, TASK_STATUS_COLORS, PRIORITY, PRIORITY
 export default function MyWork() {
   const navigate = useNavigate()
   const { activeModal, openModal } = useUIStore()
+  const { user } = useAuthStore()
   const { canCreateInProject, isManager } = useAccess()
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
@@ -124,7 +126,9 @@ export default function MyWork() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">My Work</h1>
-        <p className="text-gray-500 mt-1">All tasks assigned to you</p>
+        <p className="text-gray-500 mt-1">
+          {user?.role === 'super_admin' ? 'All tasks in the system' : 'All tasks assigned to you'}
+        </p>
       </div>
 
       {/* Stats */}
@@ -189,10 +193,10 @@ export default function MyWork() {
               className="input-field py-1.5 text-sm"
             >
               <option value="all">All</option>
-              <option value={TASK_STATUS.IN_PROGRESS}>In Progress</option>
-              <option value={TASK_STATUS.HOLD}>On Hold</option>
-              <option value={TASK_STATUS.REVIEW}>In Review</option>
-              <option value={TASK_STATUS.COMPLETED}>Completed</option>
+              <option value={TASK_STATUS.IN_PROGRESS}>{TASK_STATUS_LABELS[TASK_STATUS.IN_PROGRESS]}</option>
+              <option value={TASK_STATUS.HOLD}>{TASK_STATUS_LABELS[TASK_STATUS.HOLD]}</option>
+              <option value={TASK_STATUS.REVIEW}>{TASK_STATUS_LABELS[TASK_STATUS.REVIEW]}</option>
+              <option value={TASK_STATUS.COMPLETED}>{TASK_STATUS_LABELS[TASK_STATUS.COMPLETED]}</option>
             </select>
           </div>
 

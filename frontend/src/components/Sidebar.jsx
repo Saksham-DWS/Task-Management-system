@@ -30,8 +30,9 @@ export default function Sidebar() {
 
   const groupIds = userAccess?.groupIds || userAccess?.group_ids || []
   const projectIds = userAccess?.projectIds || userAccess?.project_ids || []
-  const hasGroupAccess = isManager() || groupIds.length > 0
-  const hasProjectAccess = isManager() || hasGroupAccess || projectIds.length > 0
+  const isLimitedAccess = !isManager() && (groupIds.length === 1 || projectIds.length === 1)
+  const hasGroupAccess = isManager() || (!isLimitedAccess && groupIds.length > 0)
+  const hasProjectAccess = isManager() || (!isLimitedAccess && (hasGroupAccess || projectIds.length > 0))
 
   const navItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', show: true },

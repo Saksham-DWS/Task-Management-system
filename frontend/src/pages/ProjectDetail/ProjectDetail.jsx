@@ -154,7 +154,7 @@ export default function ProjectDetail() {
       if (currentIndex !== -1 && nextIndex !== -1 && nextIndex < currentIndex) {
         return
       }
-      const isReviewer = user?.role === 'admin' || user?.role === 'manager' || draggedTask.assigned_by?._id === user?._id || draggedTask.assigned_by_id === user?._id
+      const isReviewer = user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'manager' || draggedTask.assigned_by?._id === user?._id || draggedTask.assigned_by_id === user?._id
       if (normalizedCurrent === TASK_STATUS.NOT_STARTED) {
         const allowedNext = isReviewer
           ? [TASK_STATUS.NOT_STARTED, TASK_STATUS.IN_PROGRESS, TASK_STATUS.HOLD]
@@ -163,7 +163,7 @@ export default function ProjectDetail() {
           return
         }
       }
-      const canComplete = user?.role === 'admin' || user?.role === 'manager' || draggedTask.assigned_by?._id === user?._id || draggedTask.assigned_by_id === user?._id
+      const canComplete = user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'manager' || draggedTask.assigned_by?._id === user?._id || draggedTask.assigned_by_id === user?._id
       if (newStatus === TASK_STATUS.COMPLETED) {
         if (normalizedCurrent !== TASK_STATUS.REVIEW || !canComplete) {
           return
@@ -350,7 +350,7 @@ export default function ProjectDetail() {
   const statusClass = PROJECT_STATUS_COLORS[project.status] || 'bg-gray-100 text-gray-700'
   const statusLabel = PROJECT_STATUS_LABELS[project.status] || project.status
   const userId = user?._id || user?.id
-  const isAdmin = user?.role === 'admin' || user?.role === 'manager'
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'manager'
   const accessUsers = project.accessUsers || project.access_users || []
   const accessUserIds = project.accessUserIds || project.access_user_ids || []
   const memberMap = new Map()
