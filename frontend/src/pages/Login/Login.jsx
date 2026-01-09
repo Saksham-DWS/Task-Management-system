@@ -137,17 +137,7 @@ export default function Login() {
           </form>
 
           {/* Demo credentials */}
-          <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
-            <p className="text-sm text-gray-700 dark:text-gray-300 font-medium mb-2">Demo Credentials:</p>
-            <div className="space-y-1">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                <span className="font-medium">Admin:</span> admin@dws.com / admin123
-              </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                <span className="font-medium">User:</span> john@dws.com / password123
-              </p>
-            </div>
-          </div>
+        
         </div>
       </div>
     </div>
