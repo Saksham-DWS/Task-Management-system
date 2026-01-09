@@ -28,11 +28,29 @@ export default function Sidebar() {
     refreshUser().catch(() => {})
   }, [])
 
-  const groupIds = userAccess?.groupIds || userAccess?.group_ids || []
-  const projectIds = userAccess?.projectIds || userAccess?.project_ids || []
-  const isLimitedAccess = !isManager() && (groupIds.length === 1 || projectIds.length === 1)
-  const hasGroupAccess = isManager() || (!isLimitedAccess && groupIds.length > 0)
-  const hasProjectAccess = isManager() || (!isLimitedAccess && (hasGroupAccess || projectIds.length > 0))
+  const normalizeAccessIds = (ids) => {
+    if (!Array.isArray(ids)) return []
+    return ids
+      .map((id) => {
+        if (id && typeof id === 'object') {
+          return id._id || id.id || ''
+        }
+        return id
+      })
+      .map((id) => String(id || '').trim())
+      .filter(Boolean)
+  }
+
+  const groupIds = normalizeAccessIds([
+    ...(userAccess?.groupIds ?? []),
+    ...(userAccess?.group_ids ?? [])
+  ])
+  const projectIds = normalizeAccessIds([
+    ...(userAccess?.projectIds ?? []),
+    ...(userAccess?.project_ids ?? [])
+  ])
+  const hasGroupAccess = isManager() || groupIds.length > 0
+  const hasProjectAccess = isManager() || groupIds.length > 0 || projectIds.length > 0
 
   const navItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', show: true },
