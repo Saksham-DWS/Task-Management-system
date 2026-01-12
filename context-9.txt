@@ -26,5 +26,23 @@ Mail sent to all project accessed user who have that project access on Goal Appl
 by the user who inputted that goal at Project goals and Achievement,
 
 
+2. Another feature i wanted to add in the system 
 
+in the my work panel in tasks showing is that showing of assingee and assinged by user name in 
+the horizontal card of the tasks and filter drop down of assigned by users and assingee users
+a filter with combination of existing filter of status and Priority so sync with that tasks and tasks showing 
+
+example  :  
+
+
+Status : [In Progess]     Priority : [ALL]              Assigned By : [ALL]           Assigned To : [ALL]
+         [Drop values]               [Drop values]                    [Drop values]                 [Drop values]
+
++-----------------------------------------------------------------------------------------------------------------------------+
+| Task                                                                                                                        |
+| test project . group name                         assigned by user name ,  assignee user name     Priority  date   status   |
+|                                                                                                                             |
++-----------------------------------------------------------------------------------------------------------------------------+
+
+Understand what i am thinking and my vision and show according to user's admin and super admin access logic of the system
 

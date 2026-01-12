@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ListTodo, Clock, PauseCircle, CheckCircle, Plus } from 'lucide-react'
 import { useUIStore } from '../../store/ui.store'
@@ -23,6 +23,8 @@ export default function MyWork() {
   const [users, setUsers] = useState([])
   const [filter, setFilter] = useState(TASK_STATUS.IN_PROGRESS)
   const [priorityFilter, setPriorityFilter] = useState('all')
+  const [assignedByFilter, setAssignedByFilter] = useState('all')
+  const [assignedToFilter, setAssignedToFilter] = useState('all')
 
   useEffect(() => {
     loadTasks()
@@ -53,6 +55,25 @@ export default function MyWork() {
     // Priority filter
     if (priorityFilter !== 'all') {
       filtered = filtered.filter(t => t.priority === priorityFilter)
+    }
+
+    // Assigned by filter
+    if (assignedByFilter !== 'all') {
+      filtered = filtered.filter((t) => {
+        const assignedById = String(t.assigned_by?._id || t.assigned_by_id || '')
+        return assignedById && assignedById === assignedByFilter
+      })
+    }
+
+    // Assigned to filter
+    if (assignedToFilter !== 'all') {
+      filtered = filtered.filter((t) => {
+        const assigneeIds = (t.assignees?.length
+          ? t.assignees.map((a) => a._id || a.id)
+          : t.assignee_ids
+        ) || []
+        return assigneeIds.map((id) => String(id)).includes(assignedToFilter)
+      })
     }
 
     return filtered
@@ -112,6 +133,46 @@ export default function MyWork() {
   )
 
   const filteredTasks = getFilteredTasks()
+
+  const userMap = useMemo(() => {
+    const map = {}
+    users.forEach((u) => {
+      const id = String(u._id || u.id || '')
+      if (id) {
+        map[id] = u
+      }
+    })
+    return map
+  }, [users])
+
+  const assignedByOptions = useMemo(() => {
+    const ids = new Set()
+    tasks.forEach((t) => {
+      const id = t.assigned_by?._id || t.assigned_by_id
+      if (id) ids.add(String(id))
+    })
+    return Array.from(ids).map((id) => ({
+      id,
+      label: userMap[id]?.name || userMap[id]?.email || id
+    })).sort((a, b) => a.label.localeCompare(b.label))
+  }, [tasks, userMap])
+
+  const assignedToOptions = useMemo(() => {
+    const ids = new Set()
+    tasks.forEach((t) => {
+      const list = (t.assignees?.length
+        ? t.assignees.map((a) => a._id || a.id)
+        : t.assignee_ids
+      ) || []
+      list.forEach((id) => {
+        if (id) ids.add(String(id))
+      })
+    })
+    return Array.from(ids).map((id) => ({
+      id,
+      label: userMap[id]?.name || userMap[id]?.email || id
+    })).sort((a, b) => a.label.localeCompare(b.label))
+  }, [tasks, userMap])
 
   if (loading) {
     return (
@@ -213,6 +274,34 @@ export default function MyWork() {
               <option value={PRIORITY.LOW}>Low</option>
             </select>
           </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-500">Assigned By:</span>
+            <select
+              value={assignedByFilter}
+              onChange={(e) => setAssignedByFilter(e.target.value)}
+              className="input-field py-1.5 text-sm"
+            >
+              <option value="all">All</option>
+              {assignedByOptions.map((opt) => (
+                <option key={opt.id} value={opt.id}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-500">Assigned To:</span>
+            <select
+              value={assignedToFilter}
+              onChange={(e) => setAssignedToFilter(e.target.value)}
+              className="input-field py-1.5 text-sm"
+            >
+              <option value="all">All</option>
+              {assignedToOptions.map((opt) => (
+                <option key={opt.id} value={opt.id}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {!projectsLoading && projects.length > 0 && (
@@ -237,6 +326,13 @@ export default function MyWork() {
               const priorityClass = PRIORITY_COLORS[task.priority] || 'bg-gray-100 text-gray-700'
               const statusClass = TASK_STATUS_COLORS[normalizedStatus] || 'bg-gray-100 text-gray-700'
               const statusLabel = TASK_STATUS_LABELS[normalizedStatus] || task.status
+              const assignedById = String(task.assigned_by?._id || task.assigned_by_id || '')
+              const assignedByName = task.assigned_by?.name || userMap[assignedById]?.name || userMap[assignedById]?.email || 'Unknown'
+              const assigneeList = (task.assignees?.length
+                ? task.assignees.map((a) => a.name || a.email).filter(Boolean)
+                : (task.assignee_ids || []).map((id) => userMap[String(id)]?.name || userMap[String(id)]?.email).filter(Boolean)
+              )
+              const assigneeLabel = assigneeList.length ? assigneeList.join(', ') : 'Unassigned'
               
               return (
                 <div 
@@ -253,6 +349,9 @@ export default function MyWork() {
                       <p className="font-medium text-gray-900 truncate">{task.title}</p>
                       <p className="text-sm text-gray-500 truncate">
                         {task.project?.name || 'No project'} • {task.group?.name || 'No group'}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">
+                        Assigned by: {assignedByName} | Assigned to: {assigneeLabel}
                       </p>
                     </div>
                   </div>
@@ -276,7 +375,7 @@ export default function MyWork() {
           <div className="text-center py-12">
             <p className="text-gray-500">No tasks match your filters</p>
             <button 
-              onClick={() => { setFilter('all'); setPriorityFilter('all'); }}
+              onClick={() => { setFilter('all'); setPriorityFilter('all'); setAssignedByFilter('all'); setAssignedToFilter('all'); }}
               className="text-primary-600 hover:text-primary-700 text-sm font-medium mt-2"
             >
               Clear filters
