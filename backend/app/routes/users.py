@@ -3,9 +3,10 @@ from bson import ObjectId
 from datetime import datetime
 import re
 
-from ..database import get_users_collection
+from ..database import get_users_collection, get_groups_collection, get_projects_collection
 from ..models import UserCreate, UserUpdate, NotificationPreferences
 from ..services.auth import get_current_user, require_role, get_password_hash
+from ..services.notifications import dispatch_notification
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
 
@@ -149,13 +150,32 @@ async def grant_group_access(
     current_user: dict = Depends(require_role(["admin", "manager"]))
 ):
     users = get_users_collection()
+    groups = get_groups_collection()
     item_id = data.get("itemId")
     
     await users.update_one(
         {"_id": ObjectId(user_id)},
         {"$addToSet": {"access.group_ids": item_id}}
     )
-    
+
+    group = None
+    if item_id:
+        try:
+            group = await groups.find_one({"_id": ObjectId(item_id)})
+        except Exception:
+            group = await groups.find_one({"_id": item_id})
+    recipients = [user_id] if user_id else []
+    if recipients:
+        group_name = group.get("name") if group else "group"
+        await dispatch_notification(
+            recipients,
+            "group_access_granted",
+            f'{current_user.get("name","Unknown")} added you to {group_name}.',
+            current_user,
+            send_email=True,
+            include_actor=True
+        )
+
     user = await users.find_one({"_id": ObjectId(user_id)}, {"password": 0})
     user["_id"] = str(user["_id"])
     return user
@@ -186,12 +206,32 @@ async def grant_project_access(
     current_user: dict = Depends(require_role(["admin", "manager"]))
 ):
     users = get_users_collection()
+    projects = get_projects_collection()
     item_id = data.get("itemId")
     
     await users.update_one(
         {"_id": ObjectId(user_id)},
         {"$addToSet": {"access.project_ids": item_id}}
     )
+
+    project = None
+    if item_id:
+        try:
+            project = await projects.find_one({"_id": ObjectId(item_id)})
+        except Exception:
+            project = await projects.find_one({"_id": item_id})
+    recipients = [user_id] if user_id else []
+    if recipients:
+        project_name = project.get("name") if project else "project"
+        await dispatch_notification(
+            recipients,
+            "project_access_granted",
+            f'{current_user.get("name","Unknown")} added you to project "{project_name}".',
+            current_user,
+            project_id=item_id,
+            send_email=True,
+            include_actor=True
+        )
     
     user = await users.find_one({"_id": ObjectId(user_id)}, {"password": 0})
     user["_id"] = str(user["_id"])

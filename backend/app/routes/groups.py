@@ -6,6 +6,7 @@ from typing import List
 from ..database import get_groups_collection, get_projects_collection
 from ..models import GroupCreate, GroupUpdate
 from ..services.auth import get_current_user, require_role
+from ..services.notifications import dispatch_notification, fetch_admin_ids
 
 router = APIRouter(prefix="/api/groups", tags=["Groups"])
 
@@ -110,6 +111,17 @@ async def create_group(
     result = await groups.insert_one(group_dict)
     group_dict["_id"] = str(result.inserted_id)
     group_dict["project_count"] = 0
+
+    admin_ids = await fetch_admin_ids()
+    if admin_ids:
+        await dispatch_notification(
+            admin_ids,
+            "group_created",
+            f'Group "{group_dict["name"]}" was created by {current_user.get("name", "Unknown")}.',
+            current_user,
+            send_email=True,
+            include_actor=True
+        )
     return group_dict
 
 

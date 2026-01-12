@@ -1,0 +1,30 @@
+**New Goal Context a feature addtion in the system which will be work and in sync with best Tailwind React UI frontend with backend and Backend Database syncing***
+
+
+1. Hey i wanted add the more or recheck the email notifications generations when the actions 
+happened in the system,
+
+Make email notifications and send to the respected users what the correct and intended data of the actions,
+
+The email creation and sent actions with correct data are,
+
+1. On Creation of Groups or Projects to the All Admins and Super Admins.
+
+2. If Adding someone in group or projects send internal notification and email to admin & respected user,
+
+if possible in 3rd make cc email to assinged by or assignee -> both get same email with the repected data and information,
+
+3. On Task level 
+  1. New Task
+  2. On Comment 
+  3. On Stage change/ status change
+  to Both Assigned by and Assignee user
+
+4. Goal & Achievement emailing 
+
+Mail sent to all project accessed user who have that project access on Goal Applying and goal Achievement tick 
+by the user who inputted that goal at Project goals and Achievement,
+
+
+
+

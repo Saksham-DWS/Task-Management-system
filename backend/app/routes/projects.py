@@ -16,7 +16,7 @@ from ..models import ProjectCreate, ProjectUpdate
 from ..services.auth import get_current_user, require_role
 from ..services.ai import generate_project_health
 from ..services.ai_scheduler import schedule_project_insight
-from ..services.notifications import dispatch_notification
+from ..services.notifications import dispatch_notification, fetch_admin_ids, project_member_ids
 
 router = APIRouter(prefix="/api/projects", tags=["Projects"])
 
@@ -364,8 +364,31 @@ async def apply_access_update(
         }
     )
 
+    if added:
+        recipients = added
+        project_name = existing.get("name", "Project")
+        await dispatch_notification(
+            recipients,
+            "project_access_granted",
+            f'{current_user.get("name","Unknown")} added you to project "{project_name}".',
+            current_user,
+            project_id=project_id,
+            send_email=True,
+            include_actor=True
+        )
+
     updated = await projects.find_one({"_id": ObjectId(project_id)})
     return updated, activity_entry
+
+
+async def project_access_recipients(project: dict, project_id: str) -> list[str]:
+    """Return all users with project access (owner, access list, collaborators, user access mapping)."""
+    members = set(project_member_ids(project))
+    users = get_users_collection()
+    cursor = users.find({"access.project_ids": {"$in": [project_id, str(project_id)]}}, {"_id": 1})
+    async for user in cursor:
+        members.add(str(user["_id"]))
+    return list(members)
 
 
 async def populate_project(project: dict) -> dict:
@@ -642,6 +665,18 @@ async def create_project(
     if access_user_ids:
         await sync_user_project_access(project_dict["_id"], access_user_ids, [])
     await schedule_project_insight(project_dict["_id"], project_dict.get("created_at"))
+
+    admin_ids = await fetch_admin_ids()
+    if admin_ids:
+        await dispatch_notification(
+            admin_ids,
+            "project_created",
+            f'Project "{project_dict["name"]}" was created by {current_user.get("name","Unknown")}.',
+            current_user,
+            project_id=project_dict["_id"],
+            send_email=True,
+            include_actor=True
+        )
     return await populate_project(project_dict)
 
 
@@ -917,6 +952,17 @@ async def add_project_goal(
         }
     )
     project = await projects.find_one({"_id": ObjectId(project_id)})
+    members = await project_access_recipients(project, project_id)
+    if members:
+        await dispatch_notification(
+            members,
+            "project_goal_added",
+            f'Project goal added in "{project.get("name","Project")}": "{text}" by {current_user.get("name","Unknown")}.',
+            current_user,
+            project_id=project_id,
+            send_email=True,
+            include_actor=True
+        )
     return await populate_project(project)
 
 @router.post("/{project_id}/goals/{goal_id}/achievements")
@@ -974,6 +1020,17 @@ async def add_project_goal_achievement(
     )
 
     project = await projects.find_one({"_id": ObjectId(project_id)})
+    members = await project_access_recipients(project, project_id)
+    if members:
+        await dispatch_notification(
+            members,
+            "project_goal_achievement",
+            f'Achievement added for goal "{target.get("text","")}" in project "{project.get("name","Project")}": "{text}" by {current_user.get("name","Unknown")}.',
+            current_user,
+            project_id=project_id,
+            send_email=True,
+            include_actor=True
+        )
     return await populate_project(project)
 
 
@@ -1030,6 +1087,21 @@ async def update_project_goal_status(
     )
 
     project = await projects.find_one({"_id": ObjectId(project_id)})
+    if achieved:
+        members = await project_access_recipients(project, project_id)
+        if members:
+            await dispatch_notification(
+                members,
+                "project_goal_status",
+                (
+                    f'Goal "{target.get("text","")}" marked achieved in project '
+                    f'"{project.get("name","Project")}" by {current_user.get("name","Unknown")}.'
+                ),
+                current_user,
+                project_id=project_id,
+                send_email=True,
+                include_actor=True
+            )
     return await populate_project(project)
 
 
@@ -1067,6 +1139,17 @@ async def add_collaborator(
     )
     
     project = await projects.find_one({"_id": ObjectId(project_id)})
+    recipients = [user_id] if user_id else []
+    if recipients:
+        await dispatch_notification(
+            recipients,
+            "project_access_granted",
+            f'{current_user.get("name","Unknown")} added {user_name or "a user"} to project "{project.get("name","Project")}".',
+            current_user,
+            project_id=project_id,
+            send_email=True,
+            include_actor=True
+        )
     return await populate_project(project)
 
 

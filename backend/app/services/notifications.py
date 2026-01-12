@@ -32,6 +32,7 @@ EVENT_PREFERENCE_MAP = {
     "task_assigned": "task_assigned",
     "task_completed": "task_completed",
     "task_comments": "task_comments",
+    "task_collaborator_added": "task_assigned",
     "project_comments": "project_comments",
     "weekly_digest": "weekly_digest"
 }
@@ -168,6 +169,32 @@ async def fetch_users_by_ids(user_ids: Iterable) -> list[dict]:
     return results
 
 
+async def fetch_admin_ids(include_super_admin: bool = True) -> list[str]:
+    """Return all admin/super_admin user ids as strings."""
+    users = get_users_collection()
+    roles = ["admin"]
+    if include_super_admin:
+        roles.append("super_admin")
+    cursor = users.find({"role": {"$in": roles}}, {"_id": 1})
+    ids: list[str] = []
+    async for user in cursor:
+        ids.append(str(user["_id"]))
+    # dedupe while preserving order
+    return list(dict.fromkeys(ids))
+
+
+def project_member_ids(project: dict) -> list[str]:
+    """Collect owner, access users, collaborators for notifications."""
+    members = []
+    if project.get("owner_id"):
+        members.append(str(project["owner_id"]))
+    for key in ["access_user_ids", "accessUserIds", "collaborator_ids"]:
+        for uid in project.get(key, []) or []:
+            if uid:
+                members.append(str(uid))
+    return list(dict.fromkeys(members))
+
+
 def _format_weekly_digest_email(user: dict, digest: dict, stats: dict, window_start: datetime, window_end: datetime) -> str:
     start_label = window_start.strftime("%d %b %Y")
     end_label = window_end.strftime("%d %b %Y")
@@ -225,14 +252,16 @@ async def dispatch_notification(
     send_email: bool = True,
     send_in_app: bool = True,
     email_subject: str | None = None,
-    email_body: str | None = None
+    email_body: str | None = None,
+    include_actor: bool = False
 ) -> None:
     recipients = _normalize_user_ids(user_ids)
     if not recipients:
         return
     actor_id = str(actor.get("_id")) if actor else None
-    if actor_id:
+    if actor_id and not include_actor:
         recipients = [uid for uid in recipients if uid != actor_id]
+    recipients = list(dict.fromkeys(recipients))
     if not recipients:
         return
 

@@ -111,3 +111,14 @@ and this mail id will be super admin and super admin can see all tasks in the MY
  the system which are currently going on , presnt, future, and past tasks of all users tasks under its my work panel.
 
 
+4. Super Admin user can also see insights panel and team & access panel in his account dashboard
+currently it is only availabel to admins only 
+
+
+Hey you have full code base access frontend backend and other files and folders with deep understand of project,
+
+New Goal Context a feature addtion in the system which will be work and in sync with best Tailwind React UI frontend with backend and Backend Database syncing
+
+Understand what I am saying , my intent, my thinking and vision, update code accordingly with best code quality, with error free code, and in sync with frontend UI , backend and the Database ,
+
+Take Step wise approach with logical, practical and adaptive approach and update my code

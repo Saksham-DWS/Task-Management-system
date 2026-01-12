@@ -1,0 +1,41 @@
+Internal notification : 
+
+Internal (in‑app) notifications are generated on these actions, with these recipients and messages:
+
+Group created → all admin + super_admin get a “Group created…” notification (groups.py).
+Project created → all admin + super_admin get a “Project created…” notification (projects.py).
+Group access granted → only the user who was added to the group (users.py).
+Project access granted (access list update) → only the user(s) newly added (projects.py → apply_access_update).
+Project collaborator added → only the collaborator user (projects.py).
+Task assigned (new task / assignees added):
+Assignees get “You have been assigned…”
+Assigner gets a separate “You assigned a task to {user}…” message
+(tasks.py).
+Task status change / review decision → all task participants (assigned_by, assignees, collaborators), including the actor (tasks.py → notify_task_change).
+Task comment added → all task participants, including the commenter (tasks.py).
+Project comment added → project owner only (projects.py).
+Project goal added → all project members (owner + access users + collaborators) (projects.py).
+Project goal achievement added → all project members (projects.py).
+Project goal marked achieved → all project members (projects.py).
+Weekly digest → each active user with weekly_digest enabled (ai_scheduler.py)., 
+
+
+
+Email : 
+
+Current email notifications (after our latest changes):
+
+Group created → all admin + super_admin.
+Project created → all admin + super_admin.
+Group access granted → only the user who got access.
+Project access granted (via access list update) → only the user(s) newly added.
+Project collaborator added → only the collaborator user.
+Task assigned (new task or new assignees) → all assignees plus the assigner (CC behavior = assigner also receives the email).
+Task status change / review decision → all task participants (assigned_by, assignees, collaborators), including the actor.
+Task comment added → all task participants, including the commenter.
+Project comment added → project owner only.
+Project goal added → all project members (owner + access users + collaborators).
+Project goal achievement added → all project members.
+Project goal marked achieved → all project members.
+Weekly digest → each active user with weekly_digest enabled.
+

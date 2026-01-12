@@ -231,11 +231,10 @@ async def notify_task_change(
     target_ids = set([str(r) for r in (recipients or []) if r]) or unique_participants(task)
     if not target_ids:
         return
-    send_email = False
+    send_email = True
     effective_event = event_type
     if status == TaskStatus.COMPLETED.value:
         effective_event = "task_completed"
-        send_email = True
     await dispatch_notification(
         target_ids,
         effective_event,
@@ -245,7 +244,8 @@ async def notify_task_change(
         project_id=task.get("project_id"),
         status=status,
         send_email=send_email,
-        send_in_app=True
+        send_in_app=True,
+        include_actor=True
     )
 
 
@@ -791,8 +791,43 @@ async def create_task(
         if due_label:
             email_lines.append(f"Due date: {due_label}")
         email_body = assignment_message + "\n\n" + "\n".join(email_lines)
+        actor_id = str(current_user.get("_id"))
+        assignee_ids = normalize_id_list(task_data.assignee_ids)
+        in_app_assignees = [uid for uid in assignee_ids if uid != actor_id]
         await dispatch_notification(
-            task_data.assignee_ids,
+            in_app_assignees,
+            "task_assigned",
+            assignment_message,
+            current_user,
+            task_id=str(task_dict.get("_id")),
+            project_id=task_data.project_id,
+            status=task_data.status.value,
+            send_email=False,
+            send_in_app=True
+        )
+        assignee_names = await fetch_user_names(in_app_assignees)
+        if actor_id:
+            if assignee_names:
+                assignee_label = ", ".join(assignee_names)
+            elif actor_id in assignee_ids:
+                assignee_label = "yourself"
+            else:
+                assignee_label = "a user"
+            await dispatch_notification(
+                [actor_id],
+                "task_assigned",
+                f'You assigned a task to {assignee_label}: "{task_data.title}".',
+                current_user,
+                task_id=str(task_dict.get("_id")),
+                project_id=task_data.project_id,
+                status=task_data.status.value,
+                send_email=False,
+                send_in_app=True,
+                include_actor=True
+            )
+        email_recipients = list(set(task_data.assignee_ids + [current_user["_id"]]))
+        await dispatch_notification(
+            email_recipients,
             "task_assigned",
             assignment_message,
             current_user,
@@ -800,9 +835,32 @@ async def create_task(
             project_id=task_data.project_id,
             status=task_data.status.value,
             send_email=True,
+            send_in_app=False,
             email_subject=subject,
-            email_body=email_body
+            email_body=email_body,
+            include_actor=True
         )
+    if task_data.collaborator_ids:
+        actor_name = current_user.get("name", "Unknown")
+        collaborator_message = f'You were added as a collaborator on task "{task_data.title}" by {actor_name}.'
+        collaborator_subject = f'Task Collaborator Added: {task_data.title}'
+        collaborator_ids = normalize_id_list(task_data.collaborator_ids)
+        collaborator_recipients = collaborator_ids
+        if collaborator_recipients:
+            await dispatch_notification(
+                collaborator_recipients,
+                "task_collaborator_added",
+                collaborator_message,
+                current_user,
+                task_id=str(task_dict.get("_id")),
+                project_id=task_data.project_id,
+                status=task_data.status.value,
+                send_email=True,
+                send_in_app=True,
+                email_subject=collaborator_subject,
+                email_body=collaborator_message,
+                include_actor=True
+            )
     assignee_names = await fetch_user_names(task_data.assignee_ids or [])
     collaborator_names = await fetch_user_names(task_data.collaborator_ids or [])
     details = []
@@ -860,6 +918,7 @@ async def update_task(
     update_data = {}
     task_title = incoming.get("title") or existing.get("title") or "Task"
     added_assignees = []
+    added_collaborators = []
 
     def add_activity(description):
         activity_entries.append(build_activity_entry(description, current_user))
@@ -963,6 +1022,7 @@ async def update_task(
             update_data["collaborator_ids"] = list(incoming["collaborator_ids"] or [])
             add_activity(f"Collaborators updated by {actor_name}")
             added_collabs = list(incoming_collabs - existing_collabs)
+            added_collaborators = list(added_collabs)
             removed_collabs = list(existing_collabs - incoming_collabs)
             collaborator_logged = False
             if added_collabs:
@@ -1024,8 +1084,43 @@ async def update_task(
         if due_label:
             email_lines.append(f"Due date: {due_label}")
         email_body = assignment_message + "\n\n" + "\n".join(email_lines)
+        actor_id = str(current_user.get("_id"))
+        assignee_ids = normalize_id_list(added_assignees)
+        in_app_assignees = [uid for uid in assignee_ids if uid != actor_id]
         await dispatch_notification(
-            added_assignees,
+            in_app_assignees,
+            "task_assigned",
+            assignment_message,
+            current_user,
+            task_id=str(task.get("_id")) if task else task_id,
+            project_id=existing.get("project_id"),
+            status=task.get("status") if task else existing.get("status"),
+            send_email=False,
+            send_in_app=True
+        )
+        assignee_names = await fetch_user_names(in_app_assignees)
+        if actor_id:
+            if assignee_names:
+                assignee_label = ", ".join(assignee_names)
+            elif actor_id in assignee_ids:
+                assignee_label = "yourself"
+            else:
+                assignee_label = "a user"
+            await dispatch_notification(
+                [actor_id],
+                "task_assigned",
+                f'You assigned a task to {assignee_label}: "{task_title}".',
+                current_user,
+                task_id=str(task.get("_id")) if task else task_id,
+                project_id=existing.get("project_id"),
+                status=task.get("status") if task else existing.get("status"),
+                send_email=False,
+                send_in_app=True,
+                include_actor=True
+            )
+        email_recipients = list(set(added_assignees + [current_user["_id"]]))
+        await dispatch_notification(
+            email_recipients,
             "task_assigned",
             assignment_message,
             current_user,
@@ -1033,9 +1128,31 @@ async def update_task(
             project_id=existing.get("project_id"),
             status=task.get("status") if task else existing.get("status"),
             send_email=True,
+            send_in_app=False,
             email_subject=subject,
-            email_body=email_body
+            email_body=email_body,
+            include_actor=True
         )
+    if added_collaborators:
+        collaborator_message = f'You were added as a collaborator on task "{task_title}" by {actor_name}.'
+        collaborator_subject = f'Task Collaborator Added: {task_title}'
+        collaborator_ids = normalize_id_list(added_collaborators)
+        collaborator_recipients = collaborator_ids
+        if collaborator_recipients:
+            await dispatch_notification(
+                collaborator_recipients,
+                "task_collaborator_added",
+                collaborator_message,
+                current_user,
+                task_id=str(task.get("_id")) if task else task_id,
+                project_id=existing.get("project_id"),
+                status=task.get("status") if task else existing.get("status"),
+                send_email=True,
+                send_in_app=True,
+                email_subject=collaborator_subject,
+                email_body=collaborator_message,
+                include_actor=True
+            )
     if status_changed_to:
         reason_note = f' Reason: "{reason_preview(reason)}"' if status_changed_to == TaskStatus.HOLD.value and reason else ""
         await notify_task_change(
@@ -1509,7 +1626,8 @@ async def add_task_comment(
         status=task.get("status"),
         send_email=True,
         email_subject=email_subject,
-        email_body=email_body
+        email_body=email_body,
+        include_actor=True
     )
     return comment_dict
 
