@@ -10,6 +10,65 @@ from ..services.notifications import dispatch_notification
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
 
+def normalize_id_list(values) -> list:
+    if not values:
+        return []
+    normalized = []
+    for value in values:
+        if value is None:
+            continue
+        normalized.append(str(value))
+    return list(dict.fromkeys(normalized))
+
+async def ensure_manager_group_access(current_user: dict, group_id: str) -> dict:
+    role = current_user.get("role", "user")
+    if role in ["admin", "super_admin"]:
+        return {}
+    if role != "manager":
+        raise HTTPException(status_code=403, detail="Not authorized")
+    groups = get_groups_collection()
+    try:
+        group = await groups.find_one({"_id": ObjectId(group_id)})
+    except Exception:
+        group = None
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    current_user_id = str(current_user.get("_id") or "")
+    access = current_user.get("access", {}) or {}
+    group_ids = normalize_id_list(access.get("group_ids", []))
+    if str(group.get("owner_id")) == current_user_id or str(group_id) in group_ids:
+        return group
+    raise HTTPException(status_code=403, detail="Not authorized to manage this group")
+
+async def ensure_manager_project_access(current_user: dict, project_id: str) -> dict:
+    role = current_user.get("role", "user")
+    if role in ["admin", "super_admin"]:
+        return {}
+    if role != "manager":
+        raise HTTPException(status_code=403, detail="Not authorized")
+    projects = get_projects_collection()
+    try:
+        project = await projects.find_one({"_id": ObjectId(project_id)})
+    except Exception:
+        project = None
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    current_user_id = str(current_user.get("_id") or "")
+    access = current_user.get("access", {}) or {}
+    group_ids = normalize_id_list(access.get("group_ids", []))
+    project_ids = normalize_id_list(access.get("project_ids", []))
+    access_user_ids = normalize_id_list(project.get("access_user_ids") or project.get("accessUserIds") or [])
+    collaborator_ids = normalize_id_list(project.get("collaborator_ids") or [])
+    if str(project.get("owner_id") or "") == current_user_id:
+        return project
+    if current_user_id in access_user_ids or current_user_id in collaborator_ids:
+        return project
+    if str(project_id) in project_ids:
+        return project
+    if str(project.get("group_id") or "") in group_ids:
+        return project
+    raise HTTPException(status_code=403, detail="Not authorized to manage this project")
+
 
 @router.get("")
 async def get_users(current_user: dict = Depends(get_current_user)):
@@ -35,7 +94,7 @@ async def get_user(user_id: str, current_user: dict = Depends(get_current_user))
 @router.post("")
 async def create_user(
     user_data: UserCreate,
-    current_user: dict = Depends(require_role(["admin"]))
+    current_user: dict = Depends(require_role(["admin", "manager"]))
 ):
     users = get_users_collection()
     
@@ -49,6 +108,8 @@ async def create_user(
 
     if user_data.role.value == "super_admin" and current_user.get("role") != "super_admin":
         raise HTTPException(status_code=403, detail="Not authorized to create super admin users")
+    if current_user.get("role") == "manager" and user_data.role.value != "user":
+        raise HTTPException(status_code=403, detail="Managers can only create standard users")
 
     user_dict = {
         "name": user_data.name,
@@ -152,6 +213,8 @@ async def grant_group_access(
     users = get_users_collection()
     groups = get_groups_collection()
     item_id = data.get("itemId")
+    if item_id:
+        await ensure_manager_group_access(current_user, item_id)
     
     await users.update_one(
         {"_id": ObjectId(user_id)},
@@ -188,6 +251,8 @@ async def revoke_group_access(
     current_user: dict = Depends(require_role(["admin", "manager"]))
 ):
     users = get_users_collection()
+    if item_id:
+        await ensure_manager_group_access(current_user, item_id)
     
     await users.update_one(
         {"_id": ObjectId(user_id)},
@@ -208,6 +273,8 @@ async def grant_project_access(
     users = get_users_collection()
     projects = get_projects_collection()
     item_id = data.get("itemId")
+    if item_id:
+        await ensure_manager_project_access(current_user, item_id)
     
     await users.update_one(
         {"_id": ObjectId(user_id)},
@@ -245,6 +312,8 @@ async def revoke_project_access(
     current_user: dict = Depends(require_role(["admin", "manager"]))
 ):
     users = get_users_collection()
+    if item_id:
+        await ensure_manager_project_access(current_user, item_id)
     
     await users.update_one(
         {"_id": ObjectId(user_id)},
@@ -259,9 +328,9 @@ async def revoke_project_access(
 @router.delete("/{user_id}")
 async def delete_user(
     user_id: str,
-    current_user: dict = Depends(require_role(["admin"]))
+    current_user: dict = Depends(require_role(["admin", "manager"]))
 ):
-    """Delete a user (admin only). Cannot delete yourself."""
+    """Delete a user. Admins can delete anyone; managers cannot delete admins/super admins."""
     users = get_users_collection()
     
     if current_user["_id"] == user_id:
@@ -273,6 +342,8 @@ async def delete_user(
         raise HTTPException(status_code=404, detail="User not found")
     if user.get("role") == "super_admin" and current_user.get("role") != "super_admin":
         raise HTTPException(status_code=403, detail="Not authorized to delete a super admin")
+    if current_user.get("role") == "manager" and user.get("role") in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized to delete admin users")
     
     # Don't allow deleting the last admin
     if user.get("role") == "admin":

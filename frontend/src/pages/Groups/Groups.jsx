@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Plus, Search } from 'lucide-react'
 import { useUIStore } from '../../store/ui.store'
 import { useAccess } from '../../hooks/useAccess'
+import { useAuthStore } from '../../store/auth.store'
 import { groupService } from '../../services/group.service'
 import api from '../../services/api'
 import GroupCard from '../../components/Cards/GroupCard'
@@ -14,11 +15,38 @@ export default function Groups() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const { activeModal, modalData, openModal } = useUIStore()
-  const { isManager } = useAccess()
+  const { isManager, userAccess } = useAccess()
+  const { user } = useAuthStore()
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
+
+  const normalizeAccessIds = (ids) => {
+    if (!Array.isArray(ids)) return []
+    return ids.map((id) => String(id || '')).filter(Boolean)
+  }
+
+  const canSeeGroup = (group) => {
+    if (!group || !user) return false
+    if (isAdmin) return true
+    const userId = String(user?._id || user?.id || '')
+    const groupId = String(group._id || group.id || '')
+    const ownerId = String(group.owner_id || group.ownerId || '')
+    if (ownerId && ownerId === userId) return true
+    const accessIds = new Set([
+      ...normalizeAccessIds(userAccess?.groupIds),
+      ...normalizeAccessIds(userAccess?.group_ids)
+    ])
+    return accessIds.has(groupId)
+  }
+
+  const accessSignature = [
+    ...normalizeAccessIds(userAccess?.groupIds),
+    ...normalizeAccessIds(userAccess?.group_ids)
+  ].sort().join('|')
 
   useEffect(() => {
+    if (!user) return
     loadGroups()
-  }, [])
+  }, [user?._id, user?.role, accessSignature])
 
   const loadGroups = async () => {
     setLoading(true)
@@ -38,7 +66,8 @@ export default function Groups() {
           accessMap.get(groupId).push(user)
         })
       })
-      const groupsWithAccess = groupData.map((group) => ({
+      const visibleGroups = groupData.filter(canSeeGroup)
+      const groupsWithAccess = visibleGroups.map((group) => ({
         ...group,
         accessUsers: accessMap.get(group._id) || []
       }))
@@ -138,6 +167,12 @@ export default function Groups() {
 
   const handleOpenEdit = (group) => {
     openModal('editGroup', { group })
+  }
+
+  const canDeleteGroup = (group) => {
+    if (isAdmin) return true
+    if (user?.role !== 'manager') return false
+    return String(group?.owner_id || '') === String(user?._id || '')
   }
 
   const handleDeleteGroup = async (groupId) => {
@@ -262,6 +297,7 @@ export default function Groups() {
           users={users}
           onSubmit={handleUpdateGroup}
           onDelete={handleDeleteGroup}
+          canDelete={canDeleteGroup(modalData.group)}
         />
       )}
     </div>

@@ -4,6 +4,8 @@ import { aiService } from '../../services/ai.service'
 import { groupService } from '../../services/group.service'
 import { projectService } from '../../services/project.service'
 import { taskService } from '../../services/task.service'
+import { useAccess } from '../../hooks/useAccess'
+import { useAuthStore } from '../../store/auth.store'
 import api from '../../services/api'
 import { formatDateTime } from '../../utils/helpers'
 import FilterMultiSelect from '../../components/Inputs/FilterMultiSelect'
@@ -17,6 +19,9 @@ const getProjectId = (project) => normalizeId(project?._id || project?.id)
 const getProjectGroupId = (project) => normalizeId(project?.group_id || project?.groupId)
 const getUserId = (user) => normalizeId(user?._id || user?.id)
 const getTaskProjectId = (task) => normalizeId(task?.project_id || task?.projectId)
+const normalizeIdList = (items) => (
+  Array.isArray(items) ? items.map((item) => normalizeId(item)).filter(Boolean) : []
+)
 
 const isProjectClosed = (project) => ['completed', 'closed'].includes(String(project?.status || '').toLowerCase())
 
@@ -83,15 +88,31 @@ export default function Insights() {
     projectIds: [],
     userIds: []
   })
+  const { user } = useAuthStore()
+  const { userAccess } = useAccess()
+  const isManager = user?.role === 'manager'
+  const currentUserId = normalizeId(user?._id || user?.id)
 
   const filtersRef = useRef(filters)
   useEffect(() => {
     filtersRef.current = filters
   }, [filters])
 
+  const accessSignature = [
+    ...normalizeIdList(userAccess?.groupIds),
+    ...normalizeIdList(userAccess?.group_ids),
+    ...normalizeIdList(userAccess?.projectIds),
+    ...normalizeIdList(userAccess?.project_ids),
+    ...normalizeIdList(user?.access?.group_ids),
+    ...normalizeIdList(user?.access?.groupIds),
+    ...normalizeIdList(user?.access?.project_ids),
+    ...normalizeIdList(user?.access?.projectIds)
+  ].sort().join('|')
+
   useEffect(() => {
+    if (!user) return
     loadData()
-  }, [])
+  }, [user?._id, user?.role, accessSignature])
 
   const loadData = async () => {
     setLoading(true)
@@ -102,10 +123,117 @@ export default function Insights() {
         taskService.getAll(),
         api.get('/users')
       ])
-      setGroups(groupData || [])
-      setProjects(projectData || [])
-      setTasks(taskData || [])
-      setUsers(userData?.data || [])
+      const groupList = groupData || []
+      const projectList = projectData || []
+      const taskList = taskData || []
+      const userList = userData?.data || []
+
+      if (isManager && currentUserId) {
+        const access = user?.access || {}
+        const localAccess = userAccess || {}
+        const accessGroupIds = new Set([
+          ...normalizeIdList(access.group_ids),
+          ...normalizeIdList(access.groupIds),
+          ...normalizeIdList(localAccess.group_ids),
+          ...normalizeIdList(localAccess.groupIds)
+        ])
+        const accessProjectIds = new Set([
+          ...normalizeIdList(access.project_ids),
+          ...normalizeIdList(access.projectIds),
+          ...normalizeIdList(localAccess.project_ids),
+          ...normalizeIdList(localAccess.projectIds)
+        ])
+
+        const projectIds = new Set()
+        projectList.forEach((project) => {
+          const projectId = getProjectId(project)
+          const groupId = getProjectGroupId(project)
+          const ownerId = normalizeId(project?.owner_id || project?.ownerId)
+          const accessIds = normalizeIdList(project?.access_user_ids || project?.accessUserIds)
+          const collaboratorIds = normalizeIdList(project?.collaborator_ids || project?.collaboratorIds)
+
+          if (accessProjectIds.has(projectId) || accessGroupIds.has(groupId)) {
+            projectIds.add(projectId)
+          }
+          if (ownerId && ownerId === currentUserId) {
+            projectIds.add(projectId)
+          }
+          if (accessIds.includes(currentUserId) || collaboratorIds.includes(currentUserId)) {
+            projectIds.add(projectId)
+          }
+        })
+
+        taskList.forEach((task) => {
+          const projectId = getTaskProjectId(task)
+          if (!projectId) return
+          const members = getTaskUserIds(task)
+          if (members.includes(currentUserId)) {
+            projectIds.add(projectId)
+          }
+        })
+
+        const scopedProjects = projectList.filter((project) => (
+          projectIds.has(getProjectId(project))
+        ))
+
+        const scopedTasks = taskList.filter((task) => {
+          const projectId = getTaskProjectId(task)
+          if (projectIds.has(projectId)) return true
+          return getTaskUserIds(task).includes(currentUserId)
+        })
+
+        const groupIds = new Set()
+        groupList.forEach((group) => {
+          const groupId = getGroupId(group)
+          const ownerId = normalizeId(group?.owner_id || group?.ownerId)
+          if (accessGroupIds.has(groupId)) {
+            groupIds.add(groupId)
+          }
+          if (ownerId && ownerId === currentUserId) {
+            groupIds.add(groupId)
+          }
+        })
+        scopedProjects.forEach((project) => {
+          const groupId = getProjectGroupId(project)
+          if (groupId) groupIds.add(groupId)
+        })
+        const scopedGroups = groupList.filter((group) => groupIds.has(getGroupId(group)))
+
+        const userIds = new Set([currentUserId])
+        const scopedGroupIds = new Set(groupIds)
+        const scopedProjectIds = new Set(projectIds)
+        scopedProjects.forEach((project) => {
+          const ownerId = normalizeId(project?.owner_id || project?.ownerId)
+          if (ownerId) userIds.add(ownerId)
+          normalizeIdList(project?.access_user_ids || project?.accessUserIds).forEach((id) => userIds.add(id))
+          normalizeIdList(project?.collaborator_ids || project?.collaboratorIds).forEach((id) => userIds.add(id))
+        })
+        scopedTasks.forEach((task) => {
+          getTaskUserIds(task).forEach((id) => userIds.add(id))
+        })
+        userList.forEach((entry) => {
+          const groupAccess = normalizeIdList(entry?.access?.group_ids || entry?.access?.groupIds)
+          const projectAccess = normalizeIdList(entry?.access?.project_ids || entry?.access?.projectIds)
+          if (groupAccess.some((gid) => scopedGroupIds.has(gid))) {
+            userIds.add(getUserId(entry))
+          }
+          if (projectAccess.some((pid) => scopedProjectIds.has(pid))) {
+            userIds.add(getUserId(entry))
+          }
+        })
+
+        const scopedUsers = userList.filter((entry) => userIds.has(getUserId(entry)))
+
+        setGroups(scopedGroups)
+        setProjects(scopedProjects)
+        setTasks(scopedTasks)
+        setUsers(scopedUsers)
+      } else {
+        setGroups(groupList)
+        setProjects(projectList)
+        setTasks(taskList)
+        setUsers(userList)
+      }
       setDataLoaded(true)
     } catch (error) {
       console.error('Failed to load insights data:', error)

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Search } from 'lucide-react'
 import { useUIStore } from '../../store/ui.store'
 import { useAccess } from '../../hooks/useAccess'
+import { useAuthStore } from '../../store/auth.store'
 import ProjectCard from '../../components/Cards/ProjectCard'
 import EditProjectModal from '../../components/Modals/EditProjectModal'
 import { projectService } from '../../services/project.service'
@@ -10,15 +11,60 @@ import api from '../../services/api'
 export default function Projects() {
   const { activeModal, openModal, closeModal, modalData } = useUIStore()
   const { canCreateInProject, isManager } = useAccess()
+  const { user } = useAuthStore()
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
 
   const [projects, setProjects] = useState([])
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
 
+  const normalizeAccessIds = (ids) => {
+    if (!Array.isArray(ids)) return []
+    return ids.map((id) => String(id || '')).filter(Boolean)
+  }
+
+  const canSeeProject = (project) => {
+    if (!project || !user) return false
+    if (isAdmin) return true
+    const userId = String(user?._id || user?.id || '')
+    const groupId = String(project.group_id || project.groupId || '')
+    const projectId = String(project._id || project.id || '')
+    const accessGroupIds = new Set([
+      ...normalizeAccessIds(user?.access?.group_ids),
+      ...normalizeAccessIds(user?.access?.groupIds)
+    ])
+    const accessProjectIds = new Set([
+      ...normalizeAccessIds(user?.access?.project_ids),
+      ...normalizeAccessIds(user?.access?.projectIds)
+    ])
+    const ownerId = String(project.owner_id || project.ownerId || '')
+    if (ownerId && ownerId === userId) return true
+    if (accessGroupIds.has(groupId)) return true
+    if (accessProjectIds.has(projectId)) return true
+
+    const accessIds = normalizeAccessIds(
+      project.accessUserIds || project.access_user_ids || []
+    )
+    const collaboratorIds = normalizeAccessIds(
+      project.collaboratorIds || project.collaborator_ids || []
+    )
+    if (accessIds.includes(userId)) return true
+    if (collaboratorIds.includes(userId)) return true
+    return false
+  }
+
+  const accessSignature = [
+    ...normalizeAccessIds(user?.access?.group_ids),
+    ...normalizeAccessIds(user?.access?.groupIds),
+    ...normalizeAccessIds(user?.access?.project_ids),
+    ...normalizeAccessIds(user?.access?.projectIds)
+  ].sort().join('|')
+
   useEffect(() => {
+    if (!user) return
     loadData()
-  }, [])
+  }, [user?._id, user?.role, accessSignature])
 
   const loadData = async () => {
     setLoading(true)
@@ -27,7 +73,8 @@ export default function Projects() {
         projectService.getAll(),
         api.get('/users').then(res => res.data).catch(() => [])
       ])
-      setProjects(projectData || [])
+      const visibleProjects = (projectData || []).filter(canSeeProject)
+      setProjects(visibleProjects)
       setUsers(usersRes || [])
     } catch (error) {
       console.error('Failed to load projects:', error)
@@ -140,6 +187,11 @@ export default function Projects() {
           onSubmit={handleUpdateProject}
           onDelete={handleDeleteProject}
           users={users}
+          canDelete={
+            isAdmin ||
+            (user?.role === 'manager' &&
+              String(modalData.project?.owner_id || '') === String(user?._id || ''))
+          }
         />
       )}
     </div>

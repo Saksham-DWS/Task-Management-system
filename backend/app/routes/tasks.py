@@ -52,11 +52,34 @@ def normalize_id_list(values) -> list:
         normalized.append(str(value))
     return normalized
 
+async def has_task_access(current_user: dict, task: dict) -> bool:
+    if not current_user or not task:
+        return False
+    role = current_user.get("role", "user")
+    if role in ["admin", "super_admin"]:
+        return True
+    user_id = str(current_user.get("_id"))
+    if str(task.get("assigned_by_id") or "") == user_id:
+        return True
+    assignees = normalize_id_list(task.get("assignee_ids") or [])
+    collaborators = normalize_id_list(task.get("collaborator_ids") or [])
+    if user_id in assignees or user_id in collaborators:
+        return True
+    project_id = task.get("project_id")
+    if project_id:
+        try:
+            project = await get_projects_collection().find_one({"_id": ObjectId(project_id)})
+        except Exception:
+            project = None
+        if project and can_create_task_in_project(current_user, project):
+            return True
+    return False
+
 def can_create_task_in_project(current_user: dict, project: dict) -> bool:
     if not current_user or not project:
         return False
     role = current_user.get("role", "user")
-    if role in ["admin", "manager", "super_admin"]:
+    if role in ["admin", "super_admin"]:
         return True
     access = current_user.get("access", {}) or {}
     group_id = str(project.get("group_id") or "")
@@ -254,16 +277,29 @@ async def is_task_reviewer(task: dict, current_user: dict) -> bool:
     if not current_user or not task:
         return False
     user_id = str(current_user.get("_id"))
+    role = current_user.get("role", "user")
+    if role in ["admin", "super_admin"]:
+        return True
     if task.get("assigned_by_id") == user_id:
         return True
+    if role == "manager":
+        assignees = normalize_id_list(task.get("assignee_ids") or [])
+        collaborators = normalize_id_list(task.get("collaborator_ids") or [])
+        if user_id in assignees or user_id in collaborators:
+            return True
     try:
         if task.get("project_id"):
             project = await get_projects_collection().find_one({"_id": ObjectId(task["project_id"])})
             if project and str(project.get("owner_id")) == user_id:
                 return True
+            if project and role == "manager":
+                access_ids = normalize_id_list(project.get("access_user_ids") or project.get("accessUserIds") or [])
+                collaborator_ids = normalize_id_list(project.get("collaborator_ids") or [])
+                if user_id in access_ids or user_id in collaborator_ids:
+                    return True
     except Exception:
         pass
-    return current_user.get("role") in ["admin", "manager", "super_admin"]
+    return False
 
 
 def can_log_goal(task: dict, current_user: dict) -> bool:
@@ -622,8 +658,60 @@ async def populate_task(task: dict) -> dict:
 async def get_tasks(current_user: dict = Depends(get_current_user)):
     tasks = get_tasks_collection()
     role = current_user.get("role", "user")
-    if role in ["admin", "manager", "super_admin"]:
+    if role in ["admin", "super_admin"]:
         cursor = tasks.find({})
+    elif role == "manager":
+        projects = get_projects_collection()
+        user_id = current_user.get("_id")
+        access = current_user.get("access", {}) or {}
+        group_ids = normalize_id_list(access.get("group_ids", []))
+        project_ids = set(normalize_id_list(access.get("project_ids", [])))
+
+        filters = []
+        if group_ids:
+            filters.append({"group_id": {"$in": group_ids}})
+        if project_ids:
+            object_ids = [ObjectId(pid) for pid in project_ids if ObjectId.is_valid(pid)]
+            if object_ids:
+                filters.append({"_id": {"$in": object_ids}})
+        if user_id:
+            filters.extend([
+                {"owner_id": user_id},
+                {"collaborator_ids": user_id},
+                {"access_user_ids": user_id}
+            ])
+
+        if filters:
+            async for project in projects.find({"$or": filters}, {"_id": 1}):
+                project_ids.add(str(project.get("_id")))
+
+        project_variants = []
+        for pid in project_ids:
+            project_variants.append(pid)
+            if ObjectId.is_valid(pid):
+                project_variants.append(ObjectId(pid))
+
+        task_filters = []
+        if project_variants:
+            task_filters.append({"project_id": {"$in": project_variants}})
+        if user_id:
+            task_filters.append({
+                "$or": [
+                    {"assignee_ids": user_id},
+                    {"collaborator_ids": user_id},
+                    {"assigned_by_id": user_id}
+                ]
+            })
+        if task_filters:
+            cursor = tasks.find({"$or": task_filters})
+        else:
+            cursor = tasks.find({
+                "$or": [
+                    {"assignee_ids": user_id},
+                    {"collaborator_ids": user_id},
+                    {"assigned_by_id": user_id}
+                ]
+            })
     else:
         user_id = current_user["_id"]
         cursor = tasks.find({
@@ -672,11 +760,31 @@ async def get_tasks_by_project(
     current_user: dict = Depends(get_current_user)
 ):
     tasks = get_tasks_collection()
-    cursor = tasks.find({"project_id": project_id})
+    projects = get_projects_collection()
+    try:
+        project = await projects.find_one({"_id": ObjectId(project_id)})
+    except Exception:
+        project = None
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if can_create_task_in_project(current_user, project):
+        cursor = tasks.find({"project_id": project_id})
+    else:
+        user_id = current_user.get("_id")
+        cursor = tasks.find({
+            "project_id": project_id,
+            "$or": [
+                {"assignee_ids": user_id},
+                {"collaborator_ids": user_id},
+                {"assigned_by_id": user_id}
+            ]
+        })
     
     result = []
     async for task in cursor:
         result.append(task)
+    if not result and not can_create_task_in_project(current_user, project):
+        raise HTTPException(status_code=403, detail="Not authorized to view tasks in this project")
     return await populate_tasks_bulk(result)
 
 
@@ -686,6 +794,8 @@ async def get_task(task_id: str, current_user: dict = Depends(get_current_user))
     task = await tasks.find_one({"_id": ObjectId(task_id)})
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+    if not await has_task_access(current_user, task):
+        raise HTTPException(status_code=403, detail="Not authorized to view this task")
     
     return await populate_task(task)
 

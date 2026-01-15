@@ -18,7 +18,7 @@ const toDateInput = (value) => {
   return `${year}-${month}-${day}`
 }
 
-export default function EditProjectModal({ project, onSubmit, onDelete, users = [] }) {
+export default function EditProjectModal({ project, onSubmit, onDelete, users = [], canDelete = true }) {
   const { closeModal } = useUIStore()
   const [loading, setLoading] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -151,13 +151,17 @@ export default function EditProjectModal({ project, onSubmit, onDelete, users = 
 
           {/* Actions */}
           <div className="flex items-center justify-between gap-3 pt-4">
-            <button
-              type="button"
-              onClick={() => setShowDeleteConfirm(true)}
-              className="text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg text-sm font-medium"
-            >
-              Delete Project
-            </button>
+            {canDelete ? (
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg text-sm font-medium"
+              >
+                Delete Project
+              </button>
+            ) : (
+              <span className="text-xs text-gray-400">Only project owners can delete this project.</span>
+            )}
             <div className="flex items-center gap-3">
               <button
                 type="button"
@@ -178,7 +182,7 @@ export default function EditProjectModal({ project, onSubmit, onDelete, users = 
         </form>
       </div>
 
-      {showDeleteConfirm && (
+      {showDeleteConfirm && canDelete && (
         <ConfirmDeleteModal
           title="Delete Project"
           message="Are you sure you want to delete this project? This will remove all tasks and related data under it. This action cannot be undone."

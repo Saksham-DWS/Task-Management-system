@@ -24,6 +24,7 @@ export default function ProjectDetail() {
   const { activeModal, openModal, modalData } = useUIStore()
   const { user } = useAuthStore()
   const { canCreateInProject } = useAccess()
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
 
   const [project, setProject] = useState(null)
   const [tasks, setTasks] = useState([])
@@ -350,7 +351,6 @@ export default function ProjectDetail() {
   const statusClass = PROJECT_STATUS_COLORS[project.status] || 'bg-gray-100 text-gray-700'
   const statusLabel = PROJECT_STATUS_LABELS[project.status] || project.status
   const userId = user?._id || user?.id
-  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'manager'
   const accessUsers = project.accessUsers || project.access_users || []
   const accessUserIds = project.accessUserIds || project.access_user_ids || []
   const memberMap = new Map()
@@ -909,6 +909,11 @@ export default function ProjectDetail() {
           onSubmit={handleUpdateProject}
           onDelete={handleDeleteProject}
           users={allUsers}
+          canDelete={
+            isAdmin ||
+            (user?.role === 'manager' &&
+              String(modalData.project?.owner_id || '') === String(user?._id || ''))
+          }
         />
       )}
 

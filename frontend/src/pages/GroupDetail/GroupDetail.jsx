@@ -28,6 +28,7 @@ export default function GroupDetail() {
   const [users, setUsers] = useState([])
 
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
+  const canDeleteGroup = isAdmin || (user?.role === 'manager' && String(group?.owner_id || '') === String(user?._id || ''))
 
   useEffect(() => {
     loadData()
@@ -210,7 +211,7 @@ export default function GroupDetail() {
               <Settings size={20} className="text-gray-500 dark:text-gray-400" />
             </button>
           )}
-          {isAdmin && (
+          {canDeleteGroup && (
             <button 
               onClick={() => openModal('deleteGroup')}
               className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600 transition-colors"
@@ -303,6 +304,7 @@ export default function GroupDetail() {
           users={users}
           onSubmit={handleUpdateGroup}
           onDelete={handleDeleteGroup}
+          canDelete={canDeleteGroup}
         />
       )}
 
@@ -312,6 +314,11 @@ export default function GroupDetail() {
           onSubmit={handleUpdateProject}
           onDelete={handleDeleteProject}
           users={users}
+          canDelete={
+            isAdmin ||
+            (user?.role === 'manager' &&
+              String(modalData.project?.owner_id || '') === String(user?._id || ''))
+          }
         />
       )}
     </div>

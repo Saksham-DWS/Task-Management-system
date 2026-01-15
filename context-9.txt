@@ -46,3 +46,22 @@ Status : [In Progess]     Priority : [ALL]              Assigned By : [ALL]     
 
 Understand what i am thinking and my vision and show according to user's admin and super admin access logic of the system
 
+
+3. Hey i have a question for you if a email id and its named account was deleted and after some days 
+the account will be created with same email and and name , so our system understand and know this user is the 
+same user and that will again see its named created tasks, projects, groups like all data and accessed projects and groups
+like he will again see all data of him ? 
+
+Ans  :  No — deleting a user removes that user document and creates a new user ID on re‑register, even with the same email/name. The system does not link the new account to old data.
+
+Why:
+
+Ownership/access links use user IDs (not email), so tasks/projects/groups keep the old assigned_by_id, owner_id, and access lists.
+Deleting a user does not reassign or migrate those references.
+Code paths:
+
+User deletion: users.py
+Task/project access is ID‑based: tasks.py, projects.py
+Result:
+
+The recreated account will not automatically see old tasks/projects/groups unless you manually add the new user ID to access lists or transfer ownership.

@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends
+from datetime import datetime
 from typing import List
 from pydantic import BaseModel, Field
 
-from ..database import get_tasks_collection, get_projects_collection, get_ai_insights_collection
+from ..database import get_tasks_collection, get_projects_collection, get_ai_insights_collection, get_groups_collection
 from ..services.auth import get_current_user, require_role
 from ..services.ai import generate_task_insights, get_ai_recommendations, generate_admin_filter_insights
 from ..services.ai_scheduler import generate_project_insight, generate_admin_insight, serialize_insight, schedule_project_insight
@@ -18,10 +19,200 @@ def _normalize_id_list(ids):
         normalized.append(str(value))
     return list(dict.fromkeys(normalized))
 
+def _normalize_str(value) -> str:
+    return str(value) if value is not None else ""
+
+def _project_sort_key(project: dict):
+    for key in ["updated_at", "updatedAt", "created_at", "createdAt"]:
+        value = project.get(key)
+        if not value:
+            continue
+        if isinstance(value, datetime):
+            return value
+        try:
+            return datetime.fromisoformat(str(value).replace("Z", "+00:00")).replace(tzinfo=None)
+        except Exception:
+            continue
+    return datetime.min
+
+def _trim_manager_scope(
+    scoped_groups: list,
+    scoped_projects: list,
+    scoped_tasks: list,
+    scoped_users: list | None,
+    scoped_comments: list | None,
+    limit: int = 5
+) -> tuple[list, list, list, list | None, list | None]:
+    if not scoped_projects:
+        return scoped_groups, scoped_projects, scoped_tasks, scoped_users, scoped_comments
+    trimmed_projects = sorted(scoped_projects, key=_project_sort_key, reverse=True)[:limit]
+    trimmed_project_ids = {_normalize_str(project.get("_id")) for project in trimmed_projects if project.get("_id")}
+    trimmed_tasks = [
+        task for task in scoped_tasks
+        if _normalize_str(task.get("project_id")) in trimmed_project_ids
+    ]
+    trimmed_task_ids = {_normalize_str(task.get("_id")) for task in trimmed_tasks if task.get("_id")}
+    trimmed_group_ids = {
+        _normalize_str(project.get("group_id"))
+        for project in trimmed_projects
+        if project.get("group_id")
+    }
+    trimmed_groups = [
+        group for group in scoped_groups
+        if _normalize_str(group.get("_id")) in trimmed_group_ids
+    ]
+    trimmed_comments = scoped_comments
+    if scoped_comments is not None:
+        trimmed_comments = []
+        for comment in scoped_comments:
+            task_id = _normalize_str(comment.get("task_id") or comment.get("taskId"))
+            project_id = _normalize_str(comment.get("project_id") or comment.get("projectId"))
+            if task_id and task_id in trimmed_task_ids:
+                trimmed_comments.append(comment)
+                continue
+            if project_id and project_id in trimmed_project_ids:
+                trimmed_comments.append(comment)
+    trimmed_users = scoped_users
+    if scoped_users is not None:
+        user_ids = set()
+        for project in trimmed_projects:
+            owner_id = _normalize_str(project.get("owner_id"))
+            if owner_id:
+                user_ids.add(owner_id)
+            user_ids.update(_normalize_id_list(project.get("access_user_ids") or project.get("accessUserIds") or []))
+            user_ids.update(_normalize_id_list(project.get("collaborator_ids") or project.get("collaboratorIds") or []))
+        for task in trimmed_tasks:
+            assigned_by = _normalize_str(task.get("assigned_by_id"))
+            if assigned_by:
+                user_ids.add(assigned_by)
+            user_ids.update(_normalize_id_list(task.get("assignee_ids") or []))
+            user_ids.update(_normalize_id_list(task.get("collaborator_ids") or []))
+        for entry in scoped_users:
+            access = entry.get("access", {}) or {}
+            group_ids = _normalize_id_list(access.get("group_ids") or access.get("groupIds") or [])
+            project_ids = _normalize_id_list(access.get("project_ids") or access.get("projectIds") or [])
+            if any(gid in trimmed_group_ids for gid in group_ids):
+                user_ids.add(_normalize_str(entry.get("_id") or entry.get("id")))
+            if any(pid in trimmed_project_ids for pid in project_ids):
+                user_ids.add(_normalize_str(entry.get("_id") or entry.get("id")))
+        trimmed_users = [
+            user for user in scoped_users
+            if _normalize_str(user.get("_id") or user.get("id")) in user_ids
+        ]
+    return trimmed_groups, trimmed_projects, trimmed_tasks, trimmed_users, trimmed_comments
+
+def _filter_manager_scope(
+    current_user: dict,
+    groups: list,
+    projects: list,
+    tasks: list,
+    users: list | None = None,
+    comments: list | None = None
+) -> tuple[list, list, list, list | None, list | None]:
+    user_id = _normalize_str(current_user.get("_id"))
+    access = current_user.get("access", {}) or {}
+    group_ids = set(_normalize_id_list(access.get("group_ids", [])))
+    project_ids = set(_normalize_id_list(access.get("project_ids", [])))
+
+    for group in groups:
+        if _normalize_str(group.get("owner_id")) == user_id:
+            group_ids.add(_normalize_str(group.get("_id")))
+
+    accessible_project_ids = set()
+    for project in projects:
+        pid = _normalize_str(project.get("_id"))
+        group_id = _normalize_str(project.get("group_id"))
+        access_user_ids = _normalize_id_list(project.get("access_user_ids") or project.get("accessUserIds") or [])
+        collaborator_ids = _normalize_id_list(project.get("collaborator_ids") or project.get("collaboratorIds") or [])
+        if pid in project_ids or group_id in group_ids:
+            accessible_project_ids.add(pid)
+        if _normalize_str(project.get("owner_id")) == user_id:
+            accessible_project_ids.add(pid)
+        if user_id in access_user_ids or user_id in collaborator_ids:
+            accessible_project_ids.add(pid)
+
+    for task in tasks:
+        if not task:
+            continue
+        task_project_id = _normalize_str(task.get("project_id"))
+        if not task_project_id:
+            continue
+        assignees = _normalize_id_list(task.get("assignee_ids") or [])
+        collaborators = _normalize_id_list(task.get("collaborator_ids") or [])
+        if _normalize_str(task.get("assigned_by_id")) == user_id:
+            accessible_project_ids.add(task_project_id)
+        if user_id in assignees or user_id in collaborators:
+            accessible_project_ids.add(task_project_id)
+
+    for project in projects:
+        if _normalize_str(project.get("_id")) in accessible_project_ids:
+            group_id = _normalize_str(project.get("group_id"))
+            if group_id:
+                group_ids.add(group_id)
+
+    scoped_groups = [g for g in groups if _normalize_str(g.get("_id")) in group_ids]
+    scoped_projects = [p for p in projects if _normalize_str(p.get("_id")) in accessible_project_ids]
+    scoped_tasks = [t for t in tasks if _normalize_str(t.get("project_id")) in accessible_project_ids]
+
+    scoped_users = None
+    if users is not None:
+        user_ids = set()
+        for project in scoped_projects:
+            owner_id = _normalize_str(project.get("owner_id"))
+            if owner_id:
+                user_ids.add(owner_id)
+            user_ids.update(_normalize_id_list(project.get("access_user_ids") or project.get("accessUserIds") or []))
+            user_ids.update(_normalize_id_list(project.get("collaborator_ids") or project.get("collaboratorIds") or []))
+        for task in scoped_tasks:
+            assigned_by = _normalize_str(task.get("assigned_by_id"))
+            if assigned_by:
+                user_ids.add(assigned_by)
+            user_ids.update(_normalize_id_list(task.get("assignee_ids") or []))
+            user_ids.update(_normalize_id_list(task.get("collaborator_ids") or []))
+        scoped_group_ids = {_normalize_str(group.get("_id")) for group in scoped_groups}
+        scoped_project_ids = {_normalize_str(project.get("_id")) for project in scoped_projects}
+        for entry in users:
+            access = entry.get("access", {}) or {}
+            group_ids = _normalize_id_list(access.get("group_ids") or access.get("groupIds") or [])
+            project_ids = _normalize_id_list(access.get("project_ids") or access.get("projectIds") or [])
+            if any(gid in scoped_group_ids for gid in group_ids):
+                user_ids.add(_normalize_str(entry.get("_id") or entry.get("id")))
+            if any(pid in scoped_project_ids for pid in project_ids):
+                user_ids.add(_normalize_str(entry.get("_id") or entry.get("id")))
+        scoped_users = [
+            user for user in users
+            if _normalize_str(user.get("_id") or user.get("id")) in user_ids
+        ]
+
+    scoped_comments = None
+    if comments is not None:
+        task_ids = {_normalize_str(task.get("_id")) for task in scoped_tasks if task.get("_id")}
+        project_ids = {_normalize_str(project.get("_id")) for project in scoped_projects if project.get("_id")}
+        scoped_comments = []
+        for comment in comments:
+            task_id = _normalize_str(comment.get("task_id") or comment.get("taskId"))
+            project_id = _normalize_str(comment.get("project_id") or comment.get("projectId"))
+            if task_id and task_id in task_ids:
+                scoped_comments.append(comment)
+                continue
+            if project_id and project_id in project_ids:
+                scoped_comments.append(comment)
+        # Keep ordering stable
+
+    return scoped_groups, scoped_projects, scoped_tasks, scoped_users, scoped_comments
+
+
+def _manager_default_filters(scoped_groups: list, scoped_projects: list, scoped_users: list | None) -> dict:
+    return {
+        "groupIds": [],
+        "projectIds": [],
+        "userIds": []
+    }
+
 
 def _has_project_access(current_user: dict, project: dict) -> bool:
     role = current_user.get("role", "user")
-    if role in ["admin", "manager", "super_admin"]:
+    if role in ["admin", "super_admin"]:
         return True
     current_user_id = str(current_user.get("_id"))
     access = current_user.get("access", {}) or {}
@@ -266,6 +457,46 @@ async def generate_project_ai(
 async def get_admin_insights(
     current_user: dict = Depends(require_role(["admin", "manager"]))
 ):
+    if current_user.get("role") == "manager":
+        groups = get_groups_collection()
+        projects = get_projects_collection()
+        tasks = get_tasks_collection()
+        from ..database import get_users_collection, get_comments_collection
+        users = get_users_collection()
+        comments = get_comments_collection()
+
+        group_list = [group async for group in groups.find({})]
+        project_list = [project async for project in projects.find({})]
+        task_list = [task async for task in tasks.find({})]
+        user_list = [user async for user in users.find({}, {"password": 0})]
+        comment_list = [comment async for comment in comments.find({})]
+
+        scoped_groups, scoped_projects, scoped_tasks, scoped_users, scoped_comments = _filter_manager_scope(
+            current_user,
+            group_list,
+            project_list,
+            task_list,
+            user_list,
+            comment_list
+        )
+        scoped_groups, scoped_projects, scoped_tasks, scoped_users, scoped_comments = _trim_manager_scope(
+            scoped_groups,
+            scoped_projects,
+            scoped_tasks,
+            scoped_users,
+            scoped_comments
+        )
+        default_filters = _manager_default_filters(scoped_groups, scoped_projects, scoped_users)
+        insight = await generate_admin_filter_insights(
+            scoped_groups,
+            scoped_projects,
+            scoped_tasks,
+            scoped_users or [],
+            default_filters,
+            scoped_comments or []
+        )
+        return {"insight": insight}
+
     insights = get_ai_insights_collection()
     doc = await insights.find_one({"scope": "admin"})
     return {"insight": serialize_insight(doc)}
@@ -275,6 +506,46 @@ async def get_admin_insights(
 async def generate_admin_ai(
     current_user: dict = Depends(require_role(["admin", "manager"]))
 ):
+    if current_user.get("role") == "manager":
+        groups = get_groups_collection()
+        projects = get_projects_collection()
+        tasks = get_tasks_collection()
+        from ..database import get_users_collection, get_comments_collection
+        users = get_users_collection()
+        comments = get_comments_collection()
+
+        group_list = [group async for group in groups.find({})]
+        project_list = [project async for project in projects.find({})]
+        task_list = [task async for task in tasks.find({})]
+        user_list = [user async for user in users.find({}, {"password": 0})]
+        comment_list = [comment async for comment in comments.find({})]
+
+        scoped_groups, scoped_projects, scoped_tasks, scoped_users, scoped_comments = _filter_manager_scope(
+            current_user,
+            group_list,
+            project_list,
+            task_list,
+            user_list,
+            comment_list
+        )
+        scoped_groups, scoped_projects, scoped_tasks, scoped_users, scoped_comments = _trim_manager_scope(
+            scoped_groups,
+            scoped_projects,
+            scoped_tasks,
+            scoped_users,
+            scoped_comments
+        )
+        default_filters = _manager_default_filters(scoped_groups, scoped_projects, scoped_users)
+        insight = await generate_admin_filter_insights(
+            scoped_groups,
+            scoped_projects,
+            scoped_tasks,
+            scoped_users or [],
+            default_filters,
+            scoped_comments or []
+        )
+        return {"insight": insight}
+
     payload = await generate_admin_insight(
         triggered_by=str(current_user.get("_id")),
         force_refresh=True
@@ -295,32 +566,61 @@ async def get_filtered_admin_insights(
     users = get_users_collection()
     comments = get_comments_collection()
 
-    group_list = []
-    async for group in groups.find({}):
-        group_list.append(group)
+    group_list = [group async for group in groups.find({})]
+    project_list = [project async for project in projects.find({})]
+    task_list = [task async for task in tasks.find({})]
+    user_list = [user async for user in users.find({}, {"password": 0})]
+    comment_list = [comment async for comment in comments.find({})]
 
-    project_list = []
-    async for project in projects.find({}):
-        project_list.append(project)
+    filter_payload = filters.model_dump(by_alias=True)
 
-    task_list = []
-    async for task in tasks.find({}):
-        task_list.append(task)
+    if current_user.get("role") == "manager":
+        scoped_groups, scoped_projects, scoped_tasks, scoped_users, scoped_comments = _filter_manager_scope(
+            current_user,
+            group_list,
+            project_list,
+            task_list,
+            user_list,
+            comment_list
+        )
+        allowed_group_ids = {_normalize_str(g.get("_id")) for g in scoped_groups}
+        allowed_project_ids = {_normalize_str(p.get("_id")) for p in scoped_projects}
+        allowed_user_ids = {_normalize_str(u.get("_id") or u.get("id")) for u in (scoped_users or [])}
 
-    user_list = []
-    async for user in users.find({}, {"password": 0}):
-        user_list.append(user)
+        filter_payload["groupIds"] = [
+            gid for gid in filter_payload.get("groupIds", []) if _normalize_str(gid) in allowed_group_ids
+        ]
+        filter_payload["projectIds"] = [
+            pid for pid in filter_payload.get("projectIds", []) if _normalize_str(pid) in allowed_project_ids
+        ]
+        filter_payload["userIds"] = [
+            uid for uid in filter_payload.get("userIds", []) if _normalize_str(uid) in allowed_user_ids
+        ]
+        if not filter_payload.get("groupIds") and not filter_payload.get("projectIds") and not filter_payload.get("userIds"):
+            scoped_groups, scoped_projects, scoped_tasks, scoped_users, scoped_comments = _trim_manager_scope(
+                scoped_groups,
+                scoped_projects,
+                scoped_tasks,
+                scoped_users,
+                scoped_comments
+            )
+            filter_payload = _manager_default_filters(scoped_groups, scoped_projects, scoped_users)
 
-    comment_list = []
-    async for comment in comments.find({}):
-        comment_list.append(comment)
-
-    insight = await generate_admin_filter_insights(
-        group_list,
-        project_list,
-        task_list,
-        user_list,
-        filters.model_dump(by_alias=True),
-        comment_list
-    )
+        insight = await generate_admin_filter_insights(
+            scoped_groups,
+            scoped_projects,
+            scoped_tasks,
+            scoped_users or [],
+            filter_payload,
+            scoped_comments or []
+        )
+    else:
+        insight = await generate_admin_filter_insights(
+            group_list,
+            project_list,
+            task_list,
+            user_list,
+            filter_payload,
+            comment_list
+        )
     return {"insight": insight}

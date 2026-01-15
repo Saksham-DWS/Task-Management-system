@@ -3,7 +3,7 @@ from bson import ObjectId
 from datetime import datetime
 from typing import List
 
-from ..database import get_groups_collection, get_projects_collection
+from ..database import get_groups_collection, get_projects_collection, get_users_collection
 from ..models import GroupCreate, GroupUpdate
 from ..services.auth import get_current_user, require_role
 from ..services.notifications import dispatch_notification, fetch_admin_ids
@@ -24,12 +24,26 @@ async def get_project_counts_for_groups(group_ids: List[str]) -> dict:
         counts[str(row["_id"])] = row.get("count", 0)
     return counts
 
-def has_group_access(current_user: dict, group_id: str) -> bool:
+def normalize_id_list(values) -> list:
+    if not values:
+        return []
+    normalized = []
+    for value in values:
+        if value is None:
+            continue
+        normalized.append(str(value))
+    return list(dict.fromkeys(normalized))
+
+def has_group_access(current_user: dict, group_id: str, group: dict | None = None) -> bool:
     role = current_user.get("role", "user")
-    if role in ["admin", "manager", "super_admin"]:
+    if role in ["admin", "super_admin"]:
+        return True
+    current_user_id = str(current_user.get("_id") or "")
+    if group and str(group.get("owner_id")) == current_user_id:
         return True
     access = current_user.get("access", {}) or {}
-    return group_id in access.get("group_ids", [])
+    group_ids = normalize_id_list(access.get("group_ids", []))
+    return str(group_id) in group_ids
 
 
 async def get_group_with_count(group: dict) -> dict:
@@ -49,16 +63,26 @@ async def get_groups(current_user: dict = Depends(get_current_user)):
     user_role = current_user.get("role", "user")
     user_access = current_user.get("access", {})
     
-    # Admins and managers see all groups
-    if user_role in ["admin", "manager", "super_admin"]:
+    # Admins see all groups
+    if user_role in ["admin", "super_admin"]:
         cursor = groups.find({})
     else:
-        # Users see only groups they have access to
-        group_ids = user_access.get("group_ids", [])
+        # Managers/users see only groups they own or have access to
+        group_ids = normalize_id_list(user_access.get("group_ids", []))
+        filters = []
         if group_ids:
-            cursor = groups.find({"_id": {"$in": [ObjectId(cid) for cid in group_ids]}})
-        else:
+            object_ids = []
+            for cid in group_ids:
+                if ObjectId.is_valid(cid):
+                    object_ids.append(ObjectId(cid))
+            if object_ids:
+                filters.append({"_id": {"$in": object_ids}})
+        user_id = current_user.get("_id")
+        if user_id:
+            filters.append({"owner_id": user_id})
+        if not filters:
             return []
+        cursor = groups.find({"$or": filters})
     
     result = []
     group_list = []
@@ -84,7 +108,7 @@ async def get_group(group_id: str, current_user: dict = Depends(get_current_user
     
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
-    if not has_group_access(current_user, group_id):
+    if not has_group_access(current_user, group_id, group):
         raise HTTPException(status_code=403, detail="Not authorized to view this group")
     
     return await get_group_with_count(group)
@@ -96,6 +120,7 @@ async def create_group(
     current_user: dict = Depends(require_role(["admin", "manager"]))
 ):
     groups = get_groups_collection()
+    users = get_users_collection()
     
     group_dict = {
         "name": group_data.name,
@@ -111,6 +136,10 @@ async def create_group(
     result = await groups.insert_one(group_dict)
     group_dict["_id"] = str(result.inserted_id)
     group_dict["project_count"] = 0
+    await users.update_one(
+        {"_id": ObjectId(current_user["_id"])},
+        {"$addToSet": {"access.group_ids": group_dict["_id"]}}
+    )
 
     admin_ids = await fetch_admin_ids()
     if admin_ids:
@@ -132,6 +161,11 @@ async def update_group(
     current_user: dict = Depends(require_role(["admin", "manager"]))
 ):
     groups = get_groups_collection()
+    group = await groups.find_one({"_id": ObjectId(group_id)})
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    if not has_group_access(current_user, group_id, group):
+        raise HTTPException(status_code=403, detail="Not authorized to update this group")
     
     update_data = {k: v for k, v in group_data.dict().items() if v is not None}
     if not update_data:
@@ -139,14 +173,10 @@ async def update_group(
     
     update_data["updated_at"] = datetime.utcnow()
     
-    result = await groups.update_one(
+    await groups.update_one(
         {"_id": ObjectId(group_id)},
         {"$set": update_data}
     )
-    
-    if result.modified_count == 0:
-        raise HTTPException(status_code=404, detail="Group not found")
-    
     group = await groups.find_one({"_id": ObjectId(group_id)})
     return await get_group_with_count(group)
 
@@ -155,9 +185,9 @@ async def update_group(
 async def delete_group(
     group_id: str,
     force: bool = False,
-    current_user: dict = Depends(require_role(["admin"]))
+    current_user: dict = Depends(get_current_user)
 ):
-    """Delete a group. Admin only. Use force=true to delete with all projects and tasks."""
+    """Delete a group. Admins/super admins can delete any; managers can delete their own."""
     from ..database import get_tasks_collection, get_comments_collection
     
     groups = get_groups_collection()
@@ -170,6 +200,12 @@ async def delete_group(
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
     
+    role = current_user.get("role", "user")
+    if role not in ["admin", "super_admin"]:
+        owner_id = str(group.get("owner_id") or "")
+        if role != "manager" or owner_id != str(current_user.get("_id")):
+            raise HTTPException(status_code=403, detail="Not authorized to delete this group")
+
     # Check if group has projects
     project_count = await projects.count_documents({"group_id": group_id})
     
@@ -213,8 +249,11 @@ async def update_group_goals(
     current_user: dict = Depends(get_current_user)
 ):
     groups = get_groups_collection()
+    group = await groups.find_one({"_id": ObjectId(group_id)})
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
     
-    if not has_group_access(current_user, group_id):
+    if not has_group_access(current_user, group_id, group):
         raise HTTPException(status_code=403, detail="Not authorized to update this group")
     
     await groups.update_one(
@@ -233,8 +272,11 @@ async def update_group_achievements(
     current_user: dict = Depends(get_current_user)
 ):
     groups = get_groups_collection()
+    group = await groups.find_one({"_id": ObjectId(group_id)})
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
     
-    if not has_group_access(current_user, group_id):
+    if not has_group_access(current_user, group_id, group):
         raise HTTPException(status_code=403, detail="Not authorized to update this group")
     
     await groups.update_one(

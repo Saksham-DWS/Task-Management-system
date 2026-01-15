@@ -1,0 +1,24 @@
+**New Goal Context a feature addtion in the system which will be work and in sync with best Tailwind React UI frontend with backend and Backend Database syncing***
+
+
+
+1. Hey I wanted to add a new user which is "manager" 
+
+A manager user is just like normal user but with extended capabilities, we will show the manager
+AI Insights panel, Project & Group panel by default but there is a catch manager can only see project or groups who have 
+access to it like admin give the group or project access to the manager,
+
+Manager can create Group and project and can only delete the group or project that he created , 
+but the groups or projects access given to him he cannot delete it via settings, but he can give access to other user's in the project or group level accordingly
+if the project & group access given to him
+
+In AI Insights panel :  Manager can only see the Insights of Project groups users that he assigned or he is present or created
+
+when manager account maded by default the Groups and project panel were empty and having create group button in group,
+
+and admin and super admin can only create the manager show the manager access option when creating a user
+
+Also in my work Manager can see all tasks that he is involved in as usual
+
+
+

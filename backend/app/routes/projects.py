@@ -240,9 +240,12 @@ async def populate_projects_bulk(projects: list) -> list:
         project["health_score"] = _health_from_stats(stats)
     return projects
 
-def has_group_access(current_user: dict, group_id: str) -> bool:
+def has_group_access(current_user: dict, group_id: str, group: dict | None = None) -> bool:
     role = current_user.get("role", "user")
-    if role in ["admin", "manager", "super_admin"]:
+    if role in ["admin", "super_admin"]:
+        return True
+    current_user_id = str(current_user.get("_id") or "")
+    if group and str(group.get("owner_id")) == current_user_id:
         return True
     access = current_user.get("access", {}) or {}
     group_ids = normalize_id_list(access.get("group_ids", []))
@@ -250,7 +253,7 @@ def has_group_access(current_user: dict, group_id: str) -> bool:
 
 def has_project_access(current_user: dict, project_id: str, group_id: str, project: dict | None = None) -> bool:
     role = current_user.get("role", "user")
-    if role in ["admin", "manager", "super_admin"]:
+    if role in ["admin", "super_admin"]:
         return True
     current_user_id = str(current_user.get("_id"))
     access = current_user.get("access", {}) or {}
@@ -536,7 +539,7 @@ async def get_projects(current_user: dict = Depends(get_current_user)):
     user_role = current_user.get("role", "user")
     user_access = current_user.get("access", {})
     
-    if user_role in ["admin", "manager", "super_admin"]:
+    if user_role in ["admin", "super_admin"]:
         cursor = projects.find({})
     else:
         group_ids = user_access.get("group_ids", [])
@@ -572,7 +575,14 @@ async def get_projects_by_group(
     current_user: dict = Depends(get_current_user)
 ):
     projects = get_projects_collection()
-    if not has_group_access(current_user, group_id):
+    groups = get_groups_collection()
+    try:
+        group = await groups.find_one({"_id": ObjectId(group_id)})
+    except Exception:
+        group = None
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    if not has_group_access(current_user, group_id, group):
         raise HTTPException(status_code=403, detail="Not authorized to view this group")
     cursor = projects.find({"group_id": {"$in": [group_id, ObjectId(group_id)]}})
     
@@ -607,10 +617,13 @@ async def create_project(
     
     # Verify group exists
     group_id = incoming.get("groupId") or project_data.group_id
-    group = await groups.find_one({"_id": ObjectId(group_id)})
+    try:
+        group = await groups.find_one({"_id": ObjectId(group_id)})
+    except Exception:
+        group = None
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
-    if current_user.get("role") not in ["admin", "manager", "super_admin"] and not has_group_access(current_user, group_id):
+    if current_user.get("role") not in ["admin", "super_admin"] and not has_group_access(current_user, group_id, group):
         raise HTTPException(status_code=403, detail="Not authorized to create a project in this group")
 
     # Safely pick access/collaborators from either snake_case or camelCase
@@ -841,6 +854,11 @@ async def delete_project(
     project = await projects.find_one({"_id": ObjectId(project_id)})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    role = current_user.get("role", "user")
+    if role not in ["admin", "super_admin"]:
+        owner_id = str(project.get("owner_id") or "")
+        if owner_id != str(current_user.get("_id")):
+            raise HTTPException(status_code=403, detail="Not authorized to delete this project")
     
     # Check if project has tasks
     task_count = await tasks.count_documents({"project_id": project_id})

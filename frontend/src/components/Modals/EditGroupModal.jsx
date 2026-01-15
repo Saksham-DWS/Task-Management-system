@@ -4,7 +4,7 @@ import { useUIStore } from '../../store/ui.store'
 import AccessMultiSelect from '../Inputs/AccessMultiSelect'
 import ConfirmDeleteModal from './ConfirmDeleteModal'
 
-export default function EditGroupModal({ group, users = [], onSubmit, onDelete }) {
+export default function EditGroupModal({ group, users = [], onSubmit, onDelete, canDelete = true }) {
   const { closeModal } = useUIStore()
   const [formData, setFormData] = useState({
     name: group?.name || '',
@@ -89,13 +89,17 @@ export default function EditGroupModal({ group, users = [], onSubmit, onDelete }
 
           {/* Actions */}
           <div className="flex items-center justify-between gap-3 pt-4">
-            <button
-              type="button"
-              onClick={() => setShowDeleteConfirm(true)}
-              className="text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg text-sm font-medium"
-            >
-              Delete Group
-            </button>
+            {canDelete ? (
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg text-sm font-medium"
+              >
+                Delete Group
+              </button>
+            ) : (
+              <span className="text-xs text-gray-400">Only group owners can delete this group.</span>
+            )}
             <div className="flex items-center gap-3">
               <button
                 type="button"
@@ -116,7 +120,7 @@ export default function EditGroupModal({ group, users = [], onSubmit, onDelete }
         </form>
       </div>
 
-      {showDeleteConfirm && (
+      {showDeleteConfirm && canDelete && (
         <ConfirmDeleteModal
           title="Delete Group"
           message="Are you sure you want to delete this group? This will remove all projects and tasks inside it. This action cannot be undone."
