@@ -16,7 +16,7 @@ const roleLabel = (role) => {
 const statusValue = (user) => (user?.status || 'active').toLowerCase()
 
 export default function TeamsAccess() {
-  const { user: currentUser } = useAuthStore()
+  const { user: currentUser, updateUser } = useAuthStore()
   const [users, setUsers] = useState([])
   const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(true)
@@ -34,11 +34,18 @@ export default function TeamsAccess() {
   const isAdmin = [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN].includes(currentUser?.role)
   const isManager = currentUser?.role === USER_ROLES.MANAGER
   const isSuperAdmin = currentUser?.role === USER_ROLES.SUPER_ADMIN
+  const isSelfSelected = (user) => user?._id === currentUser?._id
   const canManageUser = (user) => {
     if (isSuperAdmin) return true
     if (isAdmin) return user?.role !== USER_ROLES.SUPER_ADMIN
     if (isManager) return ![USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN].includes(user?.role)
     return false
+  }
+  const canDeleteUser = (user) => {
+    if (!canManageUser(user)) return false
+    if (isSelfSelected(user)) return false
+    if (currentUser?.role === USER_ROLES.ADMIN && user?.role === USER_ROLES.ADMIN) return false
+    return true
   }
 
   useEffect(() => {
@@ -84,9 +91,12 @@ export default function TeamsAccess() {
   const handleAddUser = async (e) => {
     e.preventDefault()
     try {
+      const desiredRole = isManager && ![USER_ROLES.USER, USER_ROLES.MANAGER].includes(newUser.role)
+        ? USER_ROLES.USER
+        : newUser.role
       const payload = {
         ...newUser,
-        role: isManager ? USER_ROLES.USER : newUser.role
+        role: desiredRole
       }
       const response = await api.post('/users', payload)
       setUsers([...users, response.data])
@@ -161,6 +171,9 @@ export default function TeamsAccess() {
 
       setUsers(users.map((user) => (user._id === selectedUser._id ? updatedUser : user)))
       setSelectedUser(updatedUser)
+      if (selectedUser._id === currentUser?._id) {
+        updateUser(updatedUser)
+      }
       setShowEditUser(false)
     } catch (error) {
       console.error('Failed to update user:', error)
@@ -342,13 +355,13 @@ export default function TeamsAccess() {
                         <Edit2 size={14} />
                         Edit
                       </button>
-                    <button
+                  <button
                       onClick={(event) => {
                         event.stopPropagation()
                         setSelectedUser(user)
                         setShowDeleteConfirm(true)
                       }}
-                      disabled={user._id === currentUser?._id || !canManageUser(user)}
+                      disabled={!canDeleteUser(user)}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <Trash2 size={14} />
@@ -405,7 +418,7 @@ export default function TeamsAccess() {
                     </button>
                   <button
                     onClick={() => setShowDeleteConfirm(true)}
-                    disabled={!canManageUser(selectedUser)}
+                    disabled={!canDeleteUser(selectedUser)}
                     className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Delete user"
                   >
@@ -577,10 +590,9 @@ export default function TeamsAccess() {
                   value={newUser.role}
                   onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
                   className="input-field"
-                  disabled={isManager}
                 >
                   <option value={USER_ROLES.USER}>User</option>
-                  {isAdmin && <option value={USER_ROLES.MANAGER}>Manager</option>}
+                  {(isAdmin || isManager) && <option value={USER_ROLES.MANAGER}>Manager</option>}
                   {isAdmin && <option value={USER_ROLES.ADMIN}>Admin</option>}
                   {isSuperAdmin && <option value={USER_ROLES.SUPER_ADMIN}>Super Admin</option>}
                 </select>
@@ -651,7 +663,7 @@ export default function TeamsAccess() {
                   value={editUser.role}
                   onChange={(e) => setEditUser({ ...editUser, role: e.target.value })}
                   className="input-field"
-                  disabled={isManager}
+                  disabled={isManager || (isSelfSelected(selectedUser) && !isSuperAdmin)}
                 >
                   <option value={USER_ROLES.USER}>User</option>
                   {isAdmin && <option value={USER_ROLES.MANAGER}>Manager</option>}

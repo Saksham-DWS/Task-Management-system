@@ -108,8 +108,8 @@ async def create_user(
 
     if user_data.role.value == "super_admin" and current_user.get("role") != "super_admin":
         raise HTTPException(status_code=403, detail="Not authorized to create super admin users")
-    if current_user.get("role") == "manager" and user_data.role.value != "user":
-        raise HTTPException(status_code=403, detail="Managers can only create standard users")
+    if current_user.get("role") == "manager" and user_data.role.value not in ["user", "manager"]:
+        raise HTTPException(status_code=403, detail="Managers can only create standard or manager users")
 
     user_dict = {
         "name": user_data.name,
@@ -122,6 +122,8 @@ async def create_user(
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
     }
+    if current_user.get("role") == "admin" and user_data.role.value == "admin":
+        user_dict["admin_promoted_by"] = [str(current_user.get("_id"))]
     
     result = await users.insert_one(user_dict)
     user_dict["_id"] = str(result.inserted_id)
@@ -184,20 +186,23 @@ async def update_user_role(
     new_role = role_data.get("role")
     if new_role not in ["admin", "manager", "user", "super_admin"]:
         raise HTTPException(status_code=400, detail="Invalid role")
-    if new_role == "super_admin" and current_user.get("role") != "super_admin":
+    current_role = current_user.get("role")
+    if new_role == "super_admin" and current_role != "super_admin":
         raise HTTPException(status_code=403, detail="Not authorized to assign super admin role")
-    if current_user.get("role") != "super_admin":
-        existing = await users.find_one({"_id": ObjectId(user_id)})
-        if existing and existing.get("role") == "super_admin":
-            raise HTTPException(status_code=403, detail="Not authorized to change super admin role")
-
-    result = await users.update_one(
-        {"_id": ObjectId(user_id)},
-        {"$set": {"role": new_role, "updated_at": datetime.utcnow()}}
-    )
-    
-    if result.matched_count == 0:
+    existing = await users.find_one({"_id": ObjectId(user_id)})
+    if not existing:
         raise HTTPException(status_code=404, detail="User not found")
+    if current_role != "super_admin" and existing.get("role") == "super_admin":
+        raise HTTPException(status_code=403, detail="Not authorized to change super admin role")
+    if str(current_user.get("_id")) == str(user_id) and current_role != "super_admin":
+        raise HTTPException(status_code=403, detail="Not authorized to change your own role")
+
+    update_ops = {"$set": {"role": new_role, "updated_at": datetime.utcnow()}}
+    if current_role == "super_admin" and str(current_user.get("_id")) == str(user_id) and new_role != "super_admin":
+        update_ops["$set"]["super_admin_lock"] = False
+    if current_role == "admin" and new_role == "admin":
+        update_ops.setdefault("$addToSet", {})["admin_promoted_by"] = str(current_user.get("_id"))
+    result = await users.update_one({"_id": ObjectId(user_id)}, update_ops)
     
     user = await users.find_one({"_id": ObjectId(user_id)}, {"password": 0})
     user["_id"] = str(user["_id"])
@@ -343,6 +348,8 @@ async def delete_user(
     if user.get("role") == "super_admin" and current_user.get("role") != "super_admin":
         raise HTTPException(status_code=403, detail="Not authorized to delete a super admin")
     if current_user.get("role") == "manager" and user.get("role") in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized to delete admin users")
+    if current_user.get("role") == "admin" and user.get("role") == "admin":
         raise HTTPException(status_code=403, detail="Not authorized to delete admin users")
     
     # Don't allow deleting the last admin

@@ -62,7 +62,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     if user is None:
         raise credentials_exception
     email = str(user.get("email", "")).lower()
-    if email == SUPER_ADMIN_EMAIL and user.get("role") != "super_admin":
+    if email == SUPER_ADMIN_EMAIL and user.get("role") != "super_admin" and user.get("super_admin_lock", True):
         await users.update_one(
             {"_id": ObjectId(token_data.user_id)},
             {"$set": {"role": "super_admin"}}
