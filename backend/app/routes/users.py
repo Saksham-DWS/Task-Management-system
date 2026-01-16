@@ -194,8 +194,14 @@ async def update_user_role(
         raise HTTPException(status_code=404, detail="User not found")
     if current_role != "super_admin" and existing.get("role") == "super_admin":
         raise HTTPException(status_code=403, detail="Not authorized to change super admin role")
-    if str(current_user.get("_id")) == str(user_id) and current_role != "super_admin":
-        raise HTTPException(status_code=403, detail="Not authorized to change your own role")
+    is_self = str(current_user.get("_id")) == str(user_id)
+    if is_self:
+        if current_role == "super_admin":
+            pass
+        elif current_role == "admin" and new_role in ["manager", "user"]:
+            pass
+        else:
+            raise HTTPException(status_code=403, detail="Not authorized to change your own role")
 
     update_ops = {"$set": {"role": new_role, "updated_at": datetime.utcnow()}}
     if current_role == "super_admin" and str(current_user.get("_id")) == str(user_id) and new_role != "super_admin":

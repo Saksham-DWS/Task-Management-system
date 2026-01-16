@@ -36,6 +36,7 @@ Similarly a admin can make any user manager, admin, and a new normal user , but 
 
 all will sync accordingly
 
+Also admin can also make a new user & a existing user a admin and existing manager a admin
 
 
 

@@ -35,6 +35,7 @@ export default function TeamsAccess() {
   const isManager = currentUser?.role === USER_ROLES.MANAGER
   const isSuperAdmin = currentUser?.role === USER_ROLES.SUPER_ADMIN
   const isSelfSelected = (user) => user?._id === currentUser?._id
+  const isSelfAdmin = isSelfSelected(selectedUser) && currentUser?.role === USER_ROLES.ADMIN
   const canManageUser = (user) => {
     if (isSuperAdmin) return true
     if (isAdmin) return user?.role !== USER_ROLES.SUPER_ADMIN
@@ -663,12 +664,22 @@ export default function TeamsAccess() {
                   value={editUser.role}
                   onChange={(e) => setEditUser({ ...editUser, role: e.target.value })}
                   className="input-field"
-                  disabled={isManager || (isSelfSelected(selectedUser) && !isSuperAdmin)}
+                  disabled={isManager}
                 >
-                  <option value={USER_ROLES.USER}>User</option>
-                  {isAdmin && <option value={USER_ROLES.MANAGER}>Manager</option>}
-                  {isAdmin && <option value={USER_ROLES.ADMIN}>Admin</option>}
-                  {isSuperAdmin && <option value={USER_ROLES.SUPER_ADMIN}>Super Admin</option>}
+                  {isSelfAdmin ? (
+                    <>
+                      <option value={USER_ROLES.ADMIN} disabled>Admin (current)</option>
+                      <option value={USER_ROLES.MANAGER}>Manager</option>
+                      <option value={USER_ROLES.USER}>User</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value={USER_ROLES.USER}>User</option>
+                      {isAdmin && <option value={USER_ROLES.MANAGER}>Manager</option>}
+                      {isAdmin && <option value={USER_ROLES.ADMIN}>Admin</option>}
+                      {isSuperAdmin && <option value={USER_ROLES.SUPER_ADMIN}>Super Admin</option>}
+                    </>
+                  )}
                 </select>
               </div>
               <div className="flex gap-3 pt-2">
