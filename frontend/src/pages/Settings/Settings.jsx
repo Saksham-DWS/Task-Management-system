@@ -20,6 +20,9 @@ export default function Settings() {
     task_completed: true,
     task_comments: true,
     project_comments: true,
+    goal_assigned: true,
+    goal_achieved: true,
+    goal_comments: true,
     weekly_digest: false
   }
 
@@ -30,6 +33,9 @@ export default function Settings() {
     task_completed: prefs.task_completed ?? defaultNotificationPrefs.task_completed,
     task_comments: prefs.task_comments ?? defaultNotificationPrefs.task_comments,
     project_comments: prefs.project_comments ?? defaultNotificationPrefs.project_comments,
+    goal_assigned: prefs.goal_assigned ?? defaultNotificationPrefs.goal_assigned,
+    goal_achieved: prefs.goal_achieved ?? defaultNotificationPrefs.goal_achieved,
+    goal_comments: prefs.goal_comments ?? defaultNotificationPrefs.goal_comments,
     weekly_digest: prefs.weekly_digest ?? defaultNotificationPrefs.weekly_digest
   })
 
@@ -236,6 +242,9 @@ export default function Settings() {
                   { key: 'task_completed', label: 'Task Completed', desc: 'When a task you\'re involved in is completed' },
                   { key: 'task_comments', label: 'Task Comments', desc: 'When someone comments on your tasks' },
                   { key: 'project_comments', label: 'Project Comments', desc: 'When someone comments on your projects' },
+                  { key: 'goal_assigned', label: 'Goal Assigned', desc: 'When a goal is assigned to you' },
+                  { key: 'goal_achieved', label: 'Goal Achieved', desc: 'When an assigned goal is marked achieved' },
+                  { key: 'goal_comments', label: 'Goal Comments', desc: 'When someone comments on your goals' },
                   { key: 'weekly_digest', label: 'Weekly Digest', desc: 'Receive a weekly summary of your work' }
                 ].map(item => (
                   <label key={item.key} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg cursor-pointer">

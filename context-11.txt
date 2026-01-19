@@ -1,3 +1,288 @@
 **New Goal Context a feature addtion in the system which will be work and in sync with best Tailwind React UI frontend with backend and Backend Database syncing***
 
 
+1. I wanted to add a new feature in the application which is goal and achivement panel, which is different from project and group level ,
+goal and achievement panel is a module in its own self,
+
+It is shown to every user a goal & achivement panel,
+
+In goal and achievement Panel user can assign a Goal to a user and user will be a assignee 
+
+each user have My Goals and Assigned by me panel in goal and achievement panel :
+
+Here are functions and potential UI and actions info : 
+
+
+🎯 Goal & Achievement Panel — Text-Based UI + Functional Spec
+1️⃣ Top Navigation / Tabs
++--------------------------------------------------------------+
+|  [ My Goals ]   [ Assigned By Me ]                            |
++--------------------------------------------------------------+
+
+Behavior
+
+My Goals → Goals assigned to the logged-in user
+
+Assigned By Me → Goals created/assigned by the logged-in user
+
+2️⃣ Summary Cards (KPIs)
++------------------+   +------------------+   +------------------+
+| Achieved Goals   |   | Pending Goals    |   | Completion Rate  |
+|------------------|   |------------------|   |------------------|
+|       12         |   |        5         |   |      75%         |
+| (This Month /    |   | (This Month)     |   |                  |
+|  Selected Month) |   |                  |   |                  |
++------------------+   +------------------+   +------------------+
+
+Logic
+
+Counts update based on Month Filter
+
+Completion Rate =
+(Achieved / (Achieved + Pending)) * 100
+
+3️⃣ Filters Bar
++---------------------------------------------------------------------+
+| Status: [ All ▼ ] [ Achieved ] [ Pending ]                           |
+| Month : [ Feb 2026 ▼ ]                                               |
++---------------------------------------------------------------------+
+
+Behavior
+
+Status filter works as tabs or buttons
+
+Month dropdown filters goals by target month
+
+Filters affect:
+
+Goal list
+
+KPI counts
+
+Timeline
+
+Charts
+
+4️⃣ Assign Goal Panel (Left Sidebar)
++--------------------------------------------------+
+|  Assign a Goal                                   |
++--------------------------------------------------+
+| Assigned To                                     |
+| [ Arun Kumar ▼ ]                                 |
+|                                                  |
+| Goal Title                                      |
+| [ Improve Deployment Speed ]                     |
+|                                                  |
+| Description                                     |
+| [ Reduce CI/CD time by optimizing pipelines ]    |
+|                                                  |
+| Target Month                                    |
+| [ March 2026 ▼ ]                                 |
+|                                                  |
+| Priority                                        |
+| [ High ▼ ]                                       |
+|                                                  |
+| [ Assign Goal ]                                  |
++--------------------------------------------------+
+
+Backend Rules
+
+Only Admin / Manager / Assigned-By user can assign
+
+Required fields:
+
+Assigned To
+
+Goal Title
+
+Target Month
+
+Priority
+
+5️⃣ Goal Cards List (Main Area)
+🔵 Pending Goal Card
++------------------------------------------------------------------+
+| [ High Priority ]   [ Pending ]                                  |
+|                                                                  |
+| Goal : Improve Deployment Speed                                  |
+| Description : Reduce CI/CD time by optimizing pipelines           |
+|                                                                  |
+| Assigned By : Tarun (Admin)                                       |
+| Assigned On : Feb 03, 2026                                        |
+| Target Month : Feb 2026                                           |
+|                                                                  |
+| [ Mark Achieved ]   [ Reject / Add Reason ]                       |
++------------------------------------------------------------------+
+
+🟢 Achieved Goal Card
++------------------------------------------------------------------+
+| [ Completion Bonus ]   [ Achieved ]                               |
+|                                                                  |
+| Goal : Improve Deployment Speed                                  |
+|                                                                  |
+| Achieved On : Feb 10, 2026                                        |
+| User Comment : "Completed ahead of schedule"                     |
+|                                                                  |
+| Manager Comment : "Well done"                                    |
++------------------------------------------------------------------+
+
+6️⃣ Actions & Permissions
+Mark Achieved
+
+Visible only to:
+
+Assigned user
+
+Opens:
+
+Comment input
+
+Confirmation modal
+
+Reject / Add Reason
+
+Mandatory comment required
+
+Stored in Goal Activity Timeline
+
+7️⃣ Goal History Table
++--------------------------------------------------------------------------------------------------------+--------------------------+
+| Goal                    | Assigned To | Month     | Priority | Status   | Action     |  User comment   | Assigner comment on goal |
+|-------------------------|-------------|-----------|----------|----------|------------|-----------------+--------------------------+
+| Improve Deployment Speed| Arun        | Jan 2026  | High     | Achieved | View       | i completed it  | well done Arun           |    
++--------------------------------------------------------------------------------------+-----------------+---------------------------
+
+Extra Notes
+
+User Comment → reflects on the Goal Card and on the assigned by user row of that task in history table
+
+Assigner Comment → visible to assignee goal card
+
+Horizontal scroll enabled for long tables
+
+8️⃣ Monthly Goals Progress (Chart Area)
+Monthly Goals Progress - 2026
+Track goal completion trends over time
+
+Legend:
+● Achieved   ○ Pending
+
+|█ █ █| Jan 2026
+|█ █|   Feb 2026
+|█|     Mar 2026
+-----------------------------> Time
+
+Chart Rules
+
+Bar chart per month
+
+Split bars:
+
+Achieved
+
+Pending
+
+Scrollable horizontally for the full year
+
+9️⃣ Goal Activity Timeline (Per Goal)
+Monthly Timeline
+|
+| ● Feb 03, 2026
+|   Goal Assigned : Improve Deployment Speed
+|   Assigned By : Tarun (Admin)
+|
+| ✔ Feb 10, 2026
+|   Completed ahead of schedule
+|   Comment : "Well done"
+|
++--------------------------------------------------
+
+Timeline Rules
+
+Always vertical
+
+Ordered by date
+
+Includes:
+
+Assigned
+
+Status change
+
+Comments
+
+Rejections
+
+🔐 Data Model (Suggested)
+Goal {
+  id
+  title
+  description
+  assigned_to
+  assigned_by
+  target_month
+  priority (Low | Medium | High)
+  status (Pending | Achieved | Rejected)
+  assigned_at
+  achieved_at
+  user_comment
+  manager_comment
+}
+
+✅ Key UX Principles (From Your Sketch)
+
+✔ Clean separation of Pending vs Achieved
+✔ Strong emphasis on Monthly tracking
+✔ Comments reflect directly on Goal Cards
+✔ Horizontal scrolling for history & charts
+✔ Clear assigner vs user actions
+assigner user can delete the assigned goal that he created for other user and that goal will be deleted from the assignee my goal panel and will not be in record.
+
+
+In app notification & Email notification:  
+
+1.when a assinger assign a goal to user(assignee) 
+
+assigner got : You apply a goal to {user name},  by x date and time.
+assingee got : assinger user name, applied a goal to you {goal name} , by x date and time.
+
+same for email notification too for this action.
+
+2. When a assignee mark approve the goal he got showing in his my goal panel:
+
+assignee get :  You marked a goal {goal name} as achived.
+assigner get : A goal {goal name} marked achived by the assingee name, that has been assigned by you.
+
+same for email notification too for this action.
+
+3. when assignee user add comment on the goal after completion :
+
+assignee get :  You add a  comment "comment" on the goal name assigned by assigner user name. x date and time.
+assigner get : User{user name} added a comment on the goal "goal name" you assigned to , "comment",  x date and time.
+
+same for email notification too for this action.
+
+
+
+4. when assinger add comment on the goal in which he assigned to a user:
+
+assinger get: You added a comment {comment} on the {goal name} of the user name assigned by you., x date and time.
+assigne get : A comment {comment} has been added on the goal {goal name} by the assigner {assigner name}, x date and time.
+
+same for email notification too for this action.
+
+
+
+
+
+
+2. In the UI of goals card the card showing should be same and the mark achived button alignment should be 
+same even if the description is shared
+
+if description is shared to precure the text geeting outside of the card,
+the description should show like this "little bit description" ending with .....more.
+and when user click more it will drop and open full description,
+
+3. Make the UI of goal card component scrollable after 4 goals showing when 4 goals 
+show 4 cards , when goals will more than 4 show the scrollable card component where we can 
+see all goals by scroll down

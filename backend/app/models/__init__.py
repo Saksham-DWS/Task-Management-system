@@ -18,3 +18,7 @@ from .task import (
 from .notification import (
     NotificationBase, NotificationCreate, NotificationInDB, NotificationResponse
 )
+from .goal import (
+    GoalStatus, GoalPriority, GoalBase, GoalCreate, GoalStatusUpdate,
+    GoalCommentCreate, GoalInDB, GoalResponse
+)

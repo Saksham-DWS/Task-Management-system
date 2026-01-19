@@ -25,6 +25,9 @@ DEFAULT_NOTIFICATION_PREFERENCES = {
     "task_completed": True,
     "task_comments": True,
     "project_comments": True,
+    "goal_assigned": True,
+    "goal_achieved": True,
+    "goal_comments": True,
     "weekly_digest": False
 }
 
@@ -34,6 +37,9 @@ EVENT_PREFERENCE_MAP = {
     "task_comments": "task_comments",
     "task_collaborator_added": "task_assigned",
     "project_comments": "project_comments",
+    "goal_assigned": "goal_assigned",
+    "goal_achieved": "goal_achieved",
+    "goal_comments": "goal_comments",
     "weekly_digest": "weekly_digest"
 }
 

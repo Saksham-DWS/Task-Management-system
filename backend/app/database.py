@@ -36,6 +36,7 @@ async def ensure_indexes():
     tasks = db["tasks"]
     comments = db["comments"]
     notifications = db["notifications"]
+    goals = db["goals"]
 
     index_tasks = [
         projects.create_index("group_id"),
@@ -53,6 +54,11 @@ async def ensure_indexes():
         comments.create_index("task_id"),
         comments.create_index("project_id"),
         notifications.create_index([("user_id", 1), ("created_at", -1)]),
+        goals.create_index("assigned_to"),
+        goals.create_index("assigned_by"),
+        goals.create_index([("assigned_to", 1), ("status", 1)]),
+        goals.create_index([("assigned_by", 1), ("status", 1)]),
+        goals.create_index("target_month"),
     ]
 
     results = await asyncio.gather(*index_tasks, return_exceptions=True)
@@ -88,3 +94,7 @@ def get_notifications_collection():
 
 def get_ai_insights_collection():
     return db["ai_insights"]
+
+
+def get_goals_collection():
+    return db["goals"]

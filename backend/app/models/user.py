@@ -29,6 +29,9 @@ class NotificationPreferences(BaseModel):
     task_completed: bool = True
     task_comments: bool = True
     project_comments: bool = True
+    goal_assigned: bool = True
+    goal_achieved: bool = True
+    goal_comments: bool = True
     weekly_digest: bool = False
 
 

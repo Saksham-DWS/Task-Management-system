@@ -10,6 +10,7 @@ import ProjectDetail from '../pages/ProjectDetail/ProjectDetail'
 import TaskDetail from '../pages/TaskDetail/TaskDetail'
 import Projects from '../pages/Projects/Projects'
 import MyWork from '../pages/MyWork/MyWork'
+import Goals from '../pages/Goals/Goals'
 import TeamsAccess from '../pages/TeamsAccess/TeamsAccess'
 import Insights from '../pages/Insights/Insights'
 import Reports from '../pages/Reports/Reports'
@@ -30,6 +31,7 @@ export default function AppRoutes() {
       <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
       <Route path="/tasks/:id" element={<ProtectedRoute><TaskDetail /></ProtectedRoute>} />
       <Route path="/my-work" element={<ProtectedRoute><MyWork /></ProtectedRoute>} />
+      <Route path="/goals" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
       <Route path="/teams" element={<ProtectedRoute><TeamsAccess /></ProtectedRoute>} />
       <Route path="/insights" element={<ManagerRoute><Insights /></ManagerRoute>} />
       <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />

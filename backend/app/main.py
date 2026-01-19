@@ -14,7 +14,8 @@ from .routes import (
     projects_router,
     tasks_router,
     notifications_router,
-    ai_router
+    ai_router,
+    goals_router
 )
 
 
@@ -61,6 +62,7 @@ app.include_router(projects_router)
 app.include_router(tasks_router)
 app.include_router(notifications_router)
 app.include_router(ai_router)
+app.include_router(goals_router)
 
 
 @app.get("/")

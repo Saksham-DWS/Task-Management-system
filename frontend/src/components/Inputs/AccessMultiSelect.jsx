@@ -6,7 +6,9 @@ export default function AccessMultiSelect({
   users = [],
   selectedIds = [],
   onChange,
-  label = 'Access'
+  label = 'Access',
+  maxSelections = Infinity,
+  placeholder = 'Search users...'
 }) {
   const [isOpen, setIsOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -33,15 +35,20 @@ export default function AccessMultiSelect({
     if (selectedIds.includes(userId)) {
       onChange(selectedIds.filter((id) => id !== userId))
     } else {
-      onChange([...selectedIds, userId])
+      if (maxSelections === 1) {
+        onChange([userId])
+      } else {
+        onChange([...selectedIds, userId])
+      }
     }
   }
 
-  const selectedUsers = users.filter((user) => selectedIds.includes(user._id))
+  const getUserId = (user) => String(user?._id || user?.id || '')
+  const selectedUsers = users.filter((user) => selectedIds.includes(getUserId(user)))
 
   return (
     <div className="relative" ref={dropdownRef}>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
+      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
         {label}
       </label>
       <div
@@ -52,7 +59,7 @@ export default function AccessMultiSelect({
           {selectedUsers.length > 0 ? (
             selectedUsers.map((user) => (
               <span
-                key={user._id}
+                key={getUserId(user)}
                 className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary-100 text-primary-700 rounded-full text-xs"
               >
                 <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] ${getAvatarColor(user.name)}`}>
@@ -63,7 +70,7 @@ export default function AccessMultiSelect({
                   type="button"
                   onClick={(event) => {
                     event.stopPropagation()
-                    toggleUser(user._id)
+                    toggleUser(getUserId(user))
                   }}
                   className="hover:text-primary-900"
                 >
@@ -72,7 +79,7 @@ export default function AccessMultiSelect({
               </span>
             ))
           ) : (
-            <span className="text-gray-400">Search users...</span>
+            <span className="text-gray-400">{placeholder}</span>
           )}
         </div>
         <ChevronDown size={18} className={`text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
@@ -87,7 +94,7 @@ export default function AccessMultiSelect({
                 type="text"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search users..."
+                placeholder={placeholder}
                 className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-primary-500"
                 onClick={(event) => event.stopPropagation()}
               />
@@ -98,8 +105,8 @@ export default function AccessMultiSelect({
             {filteredUsers.length > 0 ? (
               filteredUsers.map((user) => (
                 <div
-                  key={user._id}
-                  onClick={() => toggleUser(user._id)}
+                  key={getUserId(user)}
+                  onClick={() => toggleUser(getUserId(user))}
                   className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer"
                 >
                   <span className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm ${getAvatarColor(user.name)}`}>
@@ -109,7 +116,7 @@ export default function AccessMultiSelect({
                     <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
                     <p className="text-xs text-gray-500 truncate">{user.email}</p>
                   </div>
-                  {selectedIds.includes(user._id) && (
+                  {selectedIds.includes(getUserId(user)) && (
                     <Check size={16} className="text-primary-600" />
                   )}
                 </div>
