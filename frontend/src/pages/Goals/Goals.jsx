@@ -823,7 +823,7 @@ export default function Goals() {
                           </td>
                           <td className="py-3 pr-4">
                             <button
-                              onClick={() => setSelectedGoalId(goal.id)}
+                              onClick={() => setSelectedGoalId((prev) => (prev === goal.id ? null : goal.id))}
                               className="text-blue-600 hover:text-blue-700"
                               title="View details"
                               type="button"
@@ -1095,6 +1095,8 @@ export default function Goals() {
                 const isActionOpen = actionState?.id === goal.id
                 const isCommentOpen = commentState?.id === goal.id && commentState?.type === 'user'
                 const targetLabel = formatMonthLabel(getGoalMonthValue(goal))
+                const targetDateLabel = formatDate(goal.targetDate)
+                const targetDisplay = targetDateLabel || targetLabel || 'No target'
                 const priorityLabel = `${PRIORITY_LABELS[goal.priority] || goal.priority} Priority`
                 const statusLabel = GOAL_STATUS_LABELS[goal.status] || goal.status
                 const priorityBadgeClass = `badge priority-${goal.priority || 'low'}`
@@ -1197,7 +1199,7 @@ export default function Goals() {
                           <span>
                             Target:{' '}
                             <span className="font-medium text-gray-700 dark:text-gray-200">
-                              {targetLabel || 'No target'}
+                              {targetDisplay}
                             </span>
                           </span>
                         </div>
