@@ -578,7 +578,7 @@ async def add_goal_comment(
     activity_message = (
         f'User comment added by {current_user.get("name", "Unknown")}'
         if is_user_comment else
-        f'Manager comment added by {current_user.get("name", "Unknown")}'
+        f'Assigner comment added by {current_user.get("name", "Unknown")}'
     )
 
     await goals.update_one(

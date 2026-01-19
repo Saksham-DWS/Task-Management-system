@@ -117,6 +117,10 @@ const deriveTargetMonth = (value) => {
 }
 
 const DESCRIPTION_PREVIEW_LENGTH = 90
+const normalizeAssignerLabel = (value) => {
+  if (!value) return value
+  return value.replace(/Manager comment/gi, 'Assigner comment')
+}
 
 const buildGoalTimelineEntries = (goal) => {
   if (!goal) return []
@@ -125,7 +129,7 @@ const buildGoalTimelineEntries = (goal) => {
     goal.activity.forEach((entry, idx) => {
       entries.push({
         id: `${goal.id}-activity-${entry.timestamp || idx}`,
-        title: entry.description || `Goal update: ${goal.title}`,
+        title: normalizeAssignerLabel(entry.description) || `Goal update: ${goal.title}`,
         timestamp: entry.timestamp,
         meta: entry.user ? `By ${entry.user}` : ''
       })
@@ -158,7 +162,7 @@ const buildGoalTimelineEntries = (goal) => {
     if (goal.managerComment && !goal.achievedAt && !goal.rejectedAt) {
       entries.push({
         id: `${goal.id}-manager`,
-        title: `Manager comment: ${goal.title}`,
+        title: `Assigner comment: ${goal.title}`,
         timestamp: goal.assignedAt,
         meta: goal.managerComment
       })
