@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Trash2, Send, AlertTriangle, CheckCircle, Clock, Paperclip, X, Image } from 'lucide-react'
+import { ArrowLeft, Trash2, Send, AlertTriangle, CheckCircle, Clock, Paperclip, X, Image, Settings } from 'lucide-react'
 import { useUIStore } from '../../store/ui.store'
 import { useAuthStore } from '../../store/auth.store'
 import { useAccess } from '../../hooks/useAccess'
 import { taskService } from '../../services/task.service'
+import api from '../../services/api'
 import ConfirmDeleteModal from '../../components/Modals/ConfirmDeleteModal'
 import ReasonModal from '../../components/Modals/ReasonModal'
+import EditTaskSettingsModal from '../../components/Modals/EditTaskSettingsModal'
 import { 
   getInitials, 
   getAvatarColor, 
@@ -31,11 +33,12 @@ export default function TaskDetail() {
   const navigate = useNavigate()
   const { user } = useAuthStore()
   const { activeModal, openModal, closeModal } = useUIStore()
-  const { canDeleteTask, canEditTask, canViewGroup, canViewProject } = useAccess()
+  const { canDeleteTask, canEditTask, canViewGroup, canViewProject, canManageTaskSettings } = useAccess()
   const fileInputRef = useRef(null)
 
   const [task, setTask] = useState(null)
   const [comments, setComments] = useState([])
+  const [allUsers, setAllUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [newComment, setNewComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -53,12 +56,14 @@ export default function TaskDetail() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [taskData, commentsData] = await Promise.all([
+      const [taskData, commentsData, usersData] = await Promise.all([
         taskService.getById(id),
-        taskService.getComments(id)
+        taskService.getComments(id),
+        api.get('/users').then((res) => res.data).catch(() => [])
       ])
       setTask(taskData)
       setComments(commentsData)
+      setAllUsers(usersData)
     } catch (error) {
       console.error('Failed to load task:', error)
     } finally {
@@ -205,6 +210,14 @@ export default function TaskDetail() {
     } catch (error) {
       console.error('Failed to add reply:', error)
     }
+  }
+
+  const handleUpdateTaskSettings = async ({ dueDate, assigneeIds }) => {
+    const updated = await taskService.updateAssignment(id, { dueDate, assigneeIds })
+    if (updated) {
+      setTask(updated)
+    }
+    return updated
   }
 
   const handleFileSelect = (e) => {
@@ -438,14 +451,26 @@ export default function TaskDetail() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{task.title}</h1>
         </div>
-        {canDeleteTask(task) && (
-          <button 
-            onClick={() => openModal('confirmDelete')}
-            className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600 transition-colors"
-          >
-            <Trash2 size={20} />
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {canManageTaskSettings(task) && (
+            <button
+              type="button"
+              onClick={() => openModal('editTaskSettings', { task })}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
+              title="Edit task settings"
+            >
+              <Settings size={20} />
+            </button>
+          )}
+          {canDeleteTask(task) && (
+            <button 
+              onClick={() => openModal('confirmDelete')}
+              className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600 transition-colors"
+            >
+              <Trash2 size={20} />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -773,6 +798,15 @@ export default function TaskDetail() {
           }}
           onConfirm={handleReasonConfirm}
           loading={reasonSaving}
+        />
+      )}
+
+      {activeModal === 'editTaskSettings' && (
+        <EditTaskSettingsModal
+          task={task}
+          users={allUsers}
+          onSubmit={handleUpdateTaskSettings}
+          onClose={() => closeModal()}
         />
       )}
     </div>

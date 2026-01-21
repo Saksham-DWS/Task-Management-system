@@ -36,6 +36,8 @@ EVENT_PREFERENCE_MAP = {
     "task_completed": "task_completed",
     "task_comments": "task_comments",
     "task_collaborator_added": "task_assigned",
+    "task_due_date": "task_assigned",
+    "task_assignees_updated": "task_assigned",
     "project_comments": "project_comments",
     "goal_assigned": "goal_assigned",
     "goal_achieved": "goal_achieved",

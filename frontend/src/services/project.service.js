@@ -91,6 +91,9 @@ export const projectService = {
       ...projectData,
       status: statusToBackend[projectData.status] || projectData.status
     }
+    if (projectData.groupId !== undefined) {
+      payload.group_id = projectData.groupId
+    }
     if (projectData.accessUserIds !== undefined) {
       payload.accessUserIds = projectData.accessUserIds
     }

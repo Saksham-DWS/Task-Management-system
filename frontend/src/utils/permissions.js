@@ -66,6 +66,16 @@ export const canEditTask = (userAccess, task) => {
   return getTaskIds(userAccess).includes(task._id)
 }
 
+export const canManageTaskSettings = (userAccess, task) => {
+  if (!userAccess || !task) return false
+  if ([USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN].includes(userAccess.role)) return true
+  const groupId = task.groupId || task.group_id
+  const projectId = task.projectId || task.project_id
+  if (getGroupIds(userAccess).includes(groupId)) return true
+  if (getProjectIds(userAccess).includes(projectId)) return true
+  return false
+}
+
 // Check if user can delete task
 export const canDeleteTask = (userAccess, task) => {
   if (!userAccess) return false

@@ -7,6 +7,7 @@ import {
   canCreateInGroup,
   canCreateInProject,
   canEditTask,
+  canManageTaskSettings,
   canDeleteTask,
   canManageAccess,
   getAccessLevel
@@ -30,6 +31,7 @@ export const useAccess = () => {
     canCreateInGroup: (groupId) => canCreateInGroup(access, groupId),
     canCreateInProject: (projectId, groupId) => canCreateInProject(access, projectId, groupId),
     canEditTask: (task) => canEditTask(access, task),
+    canManageTaskSettings: (task) => canManageTaskSettings(access, task),
     canDeleteTask: (task) => canDeleteTask(access, task),
     canManageAccess: () => canManageAccess(access),
     

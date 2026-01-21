@@ -26,6 +26,7 @@ export default function GroupDetail() {
   const [loading, setLoading] = useState(true)
   const [accessDenied, setAccessDenied] = useState(false)
   const [users, setUsers] = useState([])
+  const [groups, setGroups] = useState([])
 
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
   const canDeleteGroup = isAdmin || (user?.role === 'manager' && String(group?.owner_id || '') === String(user?._id || ''))
@@ -37,16 +38,18 @@ export default function GroupDetail() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [groupData, projectsData, usersRes] = await Promise.all([
+      const [groupData, projectsData, usersRes, groupsData] = await Promise.all([
         groupService.getById(id),
         projectService.getByGroup(id),
-        api.get('/users')
+        api.get('/users'),
+        groupService.getAll().catch(() => [])
       ])
       const usersData = usersRes.data || []
       const accessUsers = usersData.filter((u) => (u.access?.group_ids || []).includes(id))
 
       setProjects(projectsData)
       setUsers(usersData)
+      setGroups(groupsData || [])
       setGroup({ ...groupData, accessUsers })
       setAccessDenied(false)
     } catch (error) {
@@ -114,10 +117,21 @@ export default function GroupDetail() {
       if (formData.collaborators !== undefined) {
         payload.collaborators = formData.collaborators
       }
+      if (isAdmin && formData.groupId) {
+        payload.groupId = formData.groupId
+      }
       const updated = await projectService.update(projectId, payload)
-      setProjects((prev) =>
-        prev.map((proj) => (proj._id === projectId ? updated : proj))
-      )
+      const updatedGroupId = updated?.group_id || updated?.groupId || ''
+      if (updatedGroupId && String(updatedGroupId) !== String(id)) {
+        setProjects((prev) => prev.filter((proj) => proj._id !== projectId))
+      } else {
+        setProjects((prev) =>
+          prev.map((proj) => (proj._id === projectId ? updated : proj))
+        )
+      }
+      if (updatedGroupId && String(updatedGroupId) !== String(id)) {
+        await loadData()
+      }
     } catch (error) {
       console.error('Failed to update project:', error)
       throw error
@@ -314,6 +328,8 @@ export default function GroupDetail() {
           onSubmit={handleUpdateProject}
           onDelete={handleDeleteProject}
           users={users}
+          groups={groups}
+          canMoveGroup={isAdmin}
           canDelete={
             isAdmin ||
             (user?.role === 'manager' &&

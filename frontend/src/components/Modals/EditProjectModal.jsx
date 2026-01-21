@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import { useUIStore } from '../../store/ui.store'
 import { PROJECT_STATUS } from '../../utils/constants'
@@ -18,7 +18,15 @@ const toDateInput = (value) => {
   return `${year}-${month}-${day}`
 }
 
-export default function EditProjectModal({ project, onSubmit, onDelete, users = [], canDelete = true }) {
+export default function EditProjectModal({
+  project,
+  onSubmit,
+  onDelete,
+  users = [],
+  groups = [],
+  canDelete = true,
+  canMoveGroup = false
+}) {
   const { closeModal } = useUIStore()
   const [loading, setLoading] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -28,7 +36,8 @@ export default function EditProjectModal({ project, onSubmit, onDelete, users = 
     status: PROJECT_STATUS.ONGOING,
     startDate: '',
     endDate: '',
-    accessUserIds: []
+    accessUserIds: [],
+    groupId: ''
   })
 
   useEffect(() => {
@@ -39,10 +48,15 @@ export default function EditProjectModal({ project, onSubmit, onDelete, users = 
         status: project.status || PROJECT_STATUS.ONGOING,
         startDate: toDateInput(project.startDate || project.start_date),
         endDate: toDateInput(project.endDate || project.end_date),
-        accessUserIds: project.accessUserIds || project.access_user_ids || (project.accessUsers || []).map((u) => u._id)
+        accessUserIds: project.accessUserIds || project.access_user_ids || (project.accessUsers || []).map((u) => u._id),
+        groupId: project.groupId || project.group_id || ''
       })
     }
   }, [project])
+
+  const sortedGroups = useMemo(() => {
+    return [...groups].sort((a, b) => (a?.name || '').localeCompare(b?.name || ''))
+  }, [groups])
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -50,7 +64,13 @@ export default function EditProjectModal({ project, onSubmit, onDelete, users = 
 
     setLoading(true)
     try {
-      await onSubmit(project._id, formData)
+      const payload = { ...formData }
+      if (!canMoveGroup) {
+        delete payload.groupId
+      } else if (!payload.groupId && (project?.groupId || project?.group_id)) {
+        payload.groupId = project.groupId || project.group_id
+      }
+      await onSubmit(project._id, payload)
       closeModal()
     } catch (error) {
       console.error('Failed to update project:', error)
@@ -148,6 +168,17 @@ export default function EditProjectModal({ project, onSubmit, onDelete, users = 
             selectedIds={formData.accessUserIds}
             onChange={(accessUserIds) => setFormData({ ...formData, accessUserIds })}
           />
+
+          {canMoveGroup && (
+            <AccessMultiSelect
+              users={sortedGroups}
+              label="Move to Another Group"
+              selectedIds={formData.groupId ? [formData.groupId] : []}
+              onChange={(ids) => setFormData({ ...formData, groupId: ids[0] || '' })}
+              maxSelections={1}
+              placeholder="Select a group..."
+            />
+          )}
 
           {/* Actions */}
           <div className="flex items-center justify-between gap-3 pt-4">

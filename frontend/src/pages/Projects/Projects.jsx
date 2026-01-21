@@ -6,6 +6,7 @@ import { useAuthStore } from '../../store/auth.store'
 import ProjectCard from '../../components/Cards/ProjectCard'
 import EditProjectModal from '../../components/Modals/EditProjectModal'
 import { projectService } from '../../services/project.service'
+import { groupService } from '../../services/group.service'
 import api from '../../services/api'
 
 export default function Projects() {
@@ -16,6 +17,7 @@ export default function Projects() {
 
   const [projects, setProjects] = useState([])
   const [users, setUsers] = useState([])
+  const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -69,13 +71,15 @@ export default function Projects() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [projectData, usersRes] = await Promise.all([
+      const [projectData, usersRes, groupsData] = await Promise.all([
         projectService.getAll(),
-        api.get('/users').then(res => res.data).catch(() => [])
+        api.get('/users').then(res => res.data).catch(() => []),
+        groupService.getAll().catch(() => [])
       ])
       const visibleProjects = (projectData || []).filter(canSeeProject)
       setProjects(visibleProjects)
       setUsers(usersRes || [])
+      setGroups(groupsData || [])
     } catch (error) {
       console.error('Failed to load projects:', error)
     } finally {
@@ -99,6 +103,9 @@ export default function Projects() {
       }
       if (formData.collaborators !== undefined) {
         payload.collaborators = formData.collaborators
+      }
+      if (isAdmin && formData.groupId) {
+        payload.groupId = formData.groupId
       }
       const updated = await projectService.update(projectId, payload)
       setProjects((prev) => prev.map((proj) => (proj._id === projectId ? updated : proj)))
@@ -187,6 +194,8 @@ export default function Projects() {
           onSubmit={handleUpdateProject}
           onDelete={handleDeleteProject}
           users={users}
+          groups={groups}
+          canMoveGroup={isAdmin}
           canDelete={
             isAdmin ||
             (user?.role === 'manager' &&

@@ -1000,7 +1000,7 @@ async def update_task(
     if not existing:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    incoming = {k: v for k, v in task_data.dict().items() if v is not None}
+    incoming = task_data.dict(exclude_unset=True)
     if not incoming:
         raise HTTPException(status_code=400, detail="No data to update")
     current_status = normalize_status(existing.get("status"))
@@ -1028,7 +1028,11 @@ async def update_task(
     update_data = {}
     task_title = incoming.get("title") or existing.get("title") or "Task"
     added_assignees = []
+    removed_assignees = []
+    assignees_changed = False
+    assignee_change_summary = None
     added_collaborators = []
+    due_date_changed = False
 
     def add_activity(description):
         activity_entries.append(build_activity_entry(description, current_user))
@@ -1095,6 +1099,7 @@ async def update_task(
         incoming_due = normalize_datetime(incoming["due_date"])
         if existing_due != incoming_due:
             update_data["due_date"] = incoming["due_date"]
+            due_date_changed = True
             add_activity(f"Due date updated by {actor_name}")
             add_project_activity(f"Task \"{task_title}\" due date updated by {actor_name}")
 
@@ -1103,11 +1108,14 @@ async def update_task(
         existing_assignees = set(existing.get("assignee_ids", []))
         incoming_assignees = set(incoming["assignee_ids"] or [])
         if existing_assignees != incoming_assignees:
+            assignees_changed = True
             update_data["assignee_ids"] = list(incoming["assignee_ids"] or [])
             add_activity(f"Assignees updated by {actor_name}")
             added_assignees = list(incoming_assignees - existing_assignees)
             removed_assignees = list(existing_assignees - incoming_assignees)
             assignee_logged = False
+            added_names = []
+            removed_names = []
             if added_assignees:
                 added_names = await fetch_user_names(added_assignees)
                 if added_names:
@@ -1124,6 +1132,15 @@ async def update_task(
                     assignee_logged = True
             if not assignee_logged:
                 add_project_activity(f"Task \"{task_title}\" assignees updated by {actor_name}")
+            change_bits = []
+            if added_names:
+                change_bits.append(f"added {', '.join(added_names)}")
+            if removed_names:
+                change_bits.append(f"removed {', '.join(removed_names)}")
+            if change_bits:
+                assignee_change_summary = f"Assignees updated ({', '.join(change_bits)}) by {actor_name}."
+            else:
+                assignee_change_summary = f"Assignees updated by {actor_name}."
 
     if "collaborator_ids" in incoming:
         existing_collabs = set(existing.get("collaborator_ids", []))
@@ -1243,6 +1260,61 @@ async def update_task(
             email_body=email_body,
             include_actor=True
         )
+    if due_date_changed:
+        due_label = format_email_datetime(task.get("due_date")) if task else None
+        if due_label:
+            due_message = f'Due date updated for task "{task_title}" to {due_label} by {actor_name}.'
+        else:
+            due_message = f'Due date cleared for task "{task_title}" by {actor_name}.'
+        assignee_recipients = normalize_id_list(task.get("assignee_ids") or [])
+        if assignee_recipients:
+            await dispatch_notification(
+                assignee_recipients,
+                "task_due_date",
+                due_message,
+                current_user,
+                task_id=str(task.get("_id")) if task else task_id,
+                project_id=existing.get("project_id"),
+                status=task.get("status") if task else existing.get("status"),
+                send_email=True,
+                send_in_app=True,
+                email_subject=f"Task Due Date Updated: {task_title}",
+                email_body=due_message,
+                include_actor=False
+            )
+        collaborator_ids = normalize_id_list(task.get("collaborator_ids") or [])
+        assignee_set = set(assignee_recipients)
+        collaborator_recipients = [uid for uid in collaborator_ids if uid not in assignee_set]
+        if collaborator_recipients:
+            await dispatch_notification(
+                collaborator_recipients,
+                "task_due_date",
+                due_message,
+                current_user,
+                task_id=str(task.get("_id")) if task else task_id,
+                project_id=existing.get("project_id"),
+                status=task.get("status") if task else existing.get("status"),
+                send_email=False,
+                send_in_app=True,
+                include_actor=False
+            )
+    if assignees_changed:
+        collaborator_ids = normalize_id_list(task.get("collaborator_ids") or [])
+        assignee_ids = normalize_id_list(task.get("assignee_ids") or [])
+        collaborator_recipients = [uid for uid in collaborator_ids if uid not in set(assignee_ids)]
+        if collaborator_recipients and assignee_change_summary:
+            await dispatch_notification(
+                collaborator_recipients,
+                "task_assignees_updated",
+                assignee_change_summary,
+                current_user,
+                task_id=str(task.get("_id")) if task else task_id,
+                project_id=existing.get("project_id"),
+                status=task.get("status") if task else existing.get("status"),
+                send_email=False,
+                send_in_app=True,
+                include_actor=False
+            )
     if added_collaborators:
         collaborator_message = f'You were added as a collaborator on task "{task_title}" by {actor_name}.'
         collaborator_subject = f'Task Collaborator Added: {task_title}'

@@ -1,0 +1,204 @@
+**New Goal Context a feature addtion in the system which will be work and in sync with best Tailwind React UI frontend with backend and Backend Database syncing***
+
+1. Hey i need to add new features in my application,
+
+At project level tasks in our current system we cannot reassign a created task to another assignee as if in any situation the assignee is not available to do the task so 
+task assigned by user or any project level accessed user can edit the task by going under or at task card by clicking a setting button
+where they can edit the task due date and move to user : like whom to assign a task to. and that user will get task assign email just like normal assingee get, the new assingnee will be 
+considered as a new assignee to that of a task, also if assigned by user wanted to extend the due date he do that too by extending the due date the actions log will be saved too also new due date 
+email will be went to the new assingee if change in one momement and if not changing assingee just changing due date so only due date email and in app notification went to assingee user as well as if collaborator exists and in-app notification went also to him when due date changes or assingee changes for that 
+task
+
+Understand what i am saying 
+
+UI design of edit at button of task :
+
++--------------------------------------------------
+| 
+| change due date  : due date selector
+|
+|                  +----------+
+|  Move task too : | riya x   |
+|                  +----------+
+|                  | Rahul
+|                  | Tarun
+|                  | etc
+|
++---------------------------------------------------
+
+In Ui of the task setting show all user unders the move task too component so assinged by user can move task to the new user 
+and the UI and logic should be looking like when we give access to some user of like project and group like that UI should be used.
+
+give the setting of task button in card of task and in the task or top right corner and only visible to project accessed user and admin and super admin, group accessed user, just like the usual logic we already working with 
+
+Hey if assignee don'nt have project level access he cannot be able to see the task setting button , understand what i am saying this is necessary 
+
+All Actions will be recoreded in activity log as usual
+
+
+
+
+2. hey i have another feature in my mind in our project level editing where we are editing are project level details 
+in that we will give a drop down of group so the user can select the group to move the project another group
+
+Project from one group to another group only can change by the admin and super admin they are user who can see the component 
+of group changing in each project edit settings,
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  Edit Project                                                            [X] │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Project Name *                                                              │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │ group test project                                                      │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  Description                                                                 │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │ Brief description of this project...                                     │  │
+│  │                                                                          │  │
+│  │                                                                          │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  Status                                                                      │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │ Ongoing                                                             [▼] │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  Start Date                               End Date                           │
+│  ┌──────────────────────────────┐        ┌──────────────────────────────┐    │
+│  │ 15-01-2026               [📅] │        │ 23-01-2026               [📅] │    │
+│  └──────────────────────────────┘        └──────────────────────────────┘    │
+│                                                                              │
+│  Project Access (project-level owners)                                        │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │  [AU] Admin User   [x]   [SK] Saksham Kanojia   [x]                 [▼] │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+
+                            +-------------+
+    Move to Another Group : | Group 1  x  |  
+                            | Group 2     |
+                            | Group o     |                                               │
+│  Delete Project                                                              │
+│                                                                              │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                               [ Cancel ]   [ Save Changes ]  │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Just like access giving UI will make the group move UI same as like that, 
+Also by default when the project edit button click in the move to another group : current group is be selected by default ,
+so user can click cross and add new group for that project to move , 
+By this action when a project group is changed and that project moved to another group, all data related to that project 
+will be shift under that group who has been choosen for that project to move,
+
+and for the users who are project access users will face no effect right ? 
+but the users who have group access and wanted to see that project cannot able to see cause the project has been moved to another group,
+also understand the combinational cases of these scinarios and come up with best solution
+
+
+*********************************************************************************************
+
+Hey You have full code base access frontend backend and other files and folders,
+
+**New Goal Context a feature addtion in the system which will be work and in sync with best Tailwind React UI frontend with backend and Backend Database syncing***, 
+
+3. Hey i have a another feature in my mind i want to add in my application,
+
+We will introduce a Project level Goals & Achivements in the dashboard level goals and Achivements with like 
+
+another navigational component for this called  :  Project level goals and Achivements
+
+When user click on it show project level goals & Achivements in card form at goals and Achivements panel
+show to whom who have project level access, or admin & super admin show all, and manager if he create project or it got project level access only
+or got group level access show all projects of that group and all goals card, and if user got any group or project level access show him accordingly 
+use the current access behaviour who currently using our project,
+
+UI  : 
+
+========================================
+           Goals & Achievements
+----------------------------------------
+Track, assign, and measure goal
+completion across your team.
+----------------------------------------
+[ My Goals ]   [ Assigned by Me ]  [Project level ]
+========================================
+
+
+in project level goals and Achivements : 
+
+there will be the project selector just like access giving so user can select and see which project 
+level goal and Achivements he wanted to,
+
+and downthere after selection all goals card will comes under that selected project if user have access of it,
+
+UI :
+
+                                +-------------+
+select Project to view goals : | Project 1  x  |  
+                               | Project 2     |
+                               | Project o     |
+                               | Project 2     |
+                               | Project xy    |     
+
+ By this filteration all goal will show in form of card
+ and if at project level a goal just was written and user not clicked on the check box to mark it as Achived
+ so in our dashboard level project level goals and Achievements showing of project level goals and Achivements
+
+ in the goal card that goal will be marked pending , and if the goal was marked or is marked tick will be marked Achived
+ will also reflect in the project level groups showing ,
+
+ At project level goals and Achivements currently showing like this : 
+ Write a project goal...
+--------------------------------------------------
+
+[✓] i will do test next day            (Achieved)
+    By Saksham Kanojia | 08 Jan 2026 5:14 PM
+    Achieved on 08 Jan 2026 6:14 PM by Saksham Kanojia
+
+--------------------------------------------------
+
+[ ] will assign a new task to suraj in this project next week on 11 Jan 2026   (Pending)
+    By Admin User | 08 Jan 2026 6:15 PM
+                            
+
+so in the goals and Achievements dashboard level showing of project level goals and Achivements
+in card form the card should contain the " goal text, goal added date, goal added by whome , " and if Achived so the user who clicked on the proejct level goal and Achievements mark achieved 
+his name also show on that card
+
+
+card UI  : 
+
+
+--------------------------------------------------
+Medium Priority                     (Pending)
+--------------------------------------------------
+
+📌 hola
+
+👤 Assigned by: Saksham Kanojia
+🎯 Target: Jan 20, 2026
+📅 Assigned: Jan 19, 2026
+achieved by : user name
+---------------------------------------------------
+
+
+
+for achieved : 
+
+--------------------------------------------------
+Medium Priority                     (achieved)
+--------------------------------------------------
+
+📌 hola
+
+👤 Assigned by: Saksham Kanojia
+🎯 Target: Jan 20, 2026
+📅 Assigned: Jan 19, 2026
+achieved by : user name
+---------------------------------------------------
+
+
+Understand what i am saying my intent, my vision thinking and do update code accordingly, with best code quality, with error free code and in sync with Frontend UI, Backend and database,
+
+Take step wise approach with logical, practical and adaptive approach

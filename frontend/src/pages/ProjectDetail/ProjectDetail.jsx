@@ -6,6 +6,7 @@ import { useUIStore } from '../../store/ui.store'
 import { useAuthStore } from '../../store/auth.store'
 import { useAccess } from '../../hooks/useAccess'
 import { projectService } from '../../services/project.service'
+import { groupService } from '../../services/group.service'
 import { taskService } from '../../services/task.service'
 import { aiService } from '../../services/ai.service'
 import api from '../../services/api'
@@ -14,6 +15,7 @@ import NewTaskModal from '../../components/Modals/NewTaskModal'
 import EditProjectModal from '../../components/Modals/EditProjectModal'
 import ActivityLogModal from '../../components/Modals/ActivityLogModal'
 import ReasonModal from '../../components/Modals/ReasonModal'
+import EditTaskSettingsModal from '../../components/Modals/EditTaskSettingsModal'
 import ProjectAIInsights from '../../components/AI/ProjectAIInsights'
 import { groupTasksByStatus, calculateProgress, getInitials, getAvatarColor, formatDate, formatDateTime, getRelativeTime } from '../../utils/helpers'
 import { PROJECT_STATUS_COLORS, PROJECT_STATUS_LABELS, TASK_STATUS, TASK_STATUS_LABELS, TASK_STATUS_ORDER, normalizeTaskStatus } from '../../utils/constants'
@@ -21,7 +23,7 @@ import { PROJECT_STATUS_COLORS, PROJECT_STATUS_LABELS, TASK_STATUS, TASK_STATUS_
 export default function ProjectDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { activeModal, openModal, modalData } = useUIStore()
+  const { activeModal, openModal, modalData, closeModal } = useUIStore()
   const { user } = useAuthStore()
   const { canCreateInProject } = useAccess()
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
@@ -35,6 +37,7 @@ export default function ProjectDetail() {
   const [goalStatusUpdating, setGoalStatusUpdating] = useState({})
   const [initialStatus, setInitialStatus] = useState(TASK_STATUS.NOT_STARTED)
   const [allUsers, setAllUsers] = useState([])
+  const [groups, setGroups] = useState([])
   const [activity, setActivity] = useState([])
   const [comments, setComments] = useState([])
   const [newComment, setNewComment] = useState('')
@@ -54,15 +57,17 @@ export default function ProjectDetail() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [projectData, tasksData, usersData, commentsData] = await Promise.all([
+      const [projectData, tasksData, usersData, commentsData, groupsData] = await Promise.all([
         projectService.getById(id),
         taskService.getByProject(id),
         api.get('/users').then(res => res.data).catch(() => []),
-        projectService.getComments(id)
+        projectService.getComments(id),
+        groupService.getAll().catch(() => [])
       ])
       setProject(projectData)
       setTasks(tasksData)
       setAllUsers(usersData)
+      setGroups(groupsData || [])
       setGoals(projectData.weeklyGoals || projectData.weekly_goals || [])
       setActivity(projectData.activity || [])
       setComments(commentsData)
@@ -243,14 +248,18 @@ export default function ProjectDetail() {
 
   const handleUpdateProject = async (projectId, formData) => {
     try {
-      const updatedProject = await projectService.update(projectId, {
+      const payload = {
         name: formData.name,
         description: formData.description,
         status: formData.status,
         startDate: formData.startDate,
         endDate: formData.endDate,
         accessUserIds: formData.accessUserIds || []
-      })
+      }
+      if (isAdmin && formData.groupId) {
+        payload.groupId = formData.groupId
+      }
+      const updatedProject = await projectService.update(projectId, payload)
       if (updatedProject) {
         setProject(updatedProject)
         setGoals(updatedProject.weeklyGoals || updatedProject.weekly_goals || [])
@@ -440,6 +449,18 @@ export default function ProjectDetail() {
       setHoldReasonModal(null)
       setHoldReasonText('')
     }
+  }
+
+  const handleUpdateTaskSettings = async ({ dueDate, assigneeIds }) => {
+    if (!modalData?.task) return
+    const updatedTask = await taskService.updateAssignment(modalData.task._id, {
+      dueDate,
+      assigneeIds
+    })
+    if (updatedTask) {
+      setTasks((prev) => prev.map((item) => item._id === updatedTask._id ? updatedTask : item))
+    }
+    return updatedTask
   }
 
   const sortedComments = [...comments].sort((a, b) => {
@@ -909,6 +930,8 @@ export default function ProjectDetail() {
           onSubmit={handleUpdateProject}
           onDelete={handleDeleteProject}
           users={allUsers}
+          groups={groups}
+          canMoveGroup={isAdmin}
           canDelete={
             isAdmin ||
             (user?.role === 'manager' &&
@@ -936,6 +959,15 @@ export default function ProjectDetail() {
           }}
           onConfirm={handleHoldReasonConfirm}
           loading={holdReasonSaving}
+        />
+      )}
+
+      {activeModal === 'editTaskSettings' && modalData?.task && (
+        <EditTaskSettingsModal
+          task={modalData.task}
+          users={allUsers}
+          onSubmit={handleUpdateTaskSettings}
+          onClose={closeModal}
         />
       )}
     </div>

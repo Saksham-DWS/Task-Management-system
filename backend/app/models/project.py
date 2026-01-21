@@ -44,6 +44,7 @@ class ProjectUpdate(BaseModel):
     status: Optional[ProjectStatus] = None
     start_date: Optional[datetime] = Field(default=None, alias="startDate")
     end_date: Optional[datetime] = Field(default=None, alias="endDate")
+    group_id: Optional[str] = Field(default=None, alias="groupId")
     access_user_ids: Optional[List[str]] = Field(default=None, alias="accessUserIds")
     collaborator_ids: Optional[List[str]] = Field(default=None, alias="collaboratorIds")
 

@@ -1,10 +1,14 @@
 import { useNavigate } from 'react-router-dom'
-import { MessageSquare, Calendar, AlertTriangle } from 'lucide-react'
+import { MessageSquare, Calendar, AlertTriangle, Settings } from 'lucide-react'
+import { useUIStore } from '../../store/ui.store'
+import { useAccess } from '../../hooks/useAccess'
 import { getInitials, getAvatarColor, getDueDateLabel, isOverdue } from '../../utils/helpers'
 import { PRIORITY_COLORS, PRIORITY_LABELS } from '../../utils/constants'
 
 export default function TaskCard({ task, onClick }) {
   const navigate = useNavigate()
+  const { openModal } = useUIStore()
+  const { canManageTaskSettings } = useAccess()
   
   const priorityClass = PRIORITY_COLORS[task.priority] || 'bg-gray-100 text-gray-700'
   const priorityLabel = PRIORITY_LABELS[task.priority] || task.priority
@@ -19,6 +23,13 @@ export default function TaskCard({ task, onClick }) {
     }
   }
 
+  const handleSettingsClick = (event) => {
+    event.stopPropagation()
+    openModal('editTaskSettings', { task })
+  }
+
+  const showSettings = canManageTaskSettings(task)
+
   return (
     <div 
       onClick={handleClick}
@@ -27,9 +38,21 @@ export default function TaskCard({ task, onClick }) {
       {/* Header */}
       <div className="flex items-start justify-between mb-2">
         <h4 className="font-medium text-gray-900 dark:text-white line-clamp-2">{task.title}</h4>
-        {task.aiRisk && (
-          <AlertTriangle size={16} className="text-yellow-500 flex-shrink-0 ml-2" />
-        )}
+        <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+          {task.aiRisk && (
+            <AlertTriangle size={16} className="text-yellow-500" />
+          )}
+          {showSettings && (
+            <button
+              type="button"
+              onClick={handleSettingsClick}
+              className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500"
+              title="Edit task settings"
+            >
+              <Settings size={16} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Priority badge */}

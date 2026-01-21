@@ -68,6 +68,18 @@ export const taskService = {
     return normalizeTask(response.data)
   },
 
+  updateAssignment: async (id, { assigneeIds, dueDate } = {}) => {
+    const payload = {}
+    if (assigneeIds !== undefined) {
+      payload.assignee_ids = assigneeIds
+    }
+    if (dueDate !== undefined) {
+      payload.due_date = formatDateForBackend(dueDate)
+    }
+    const response = await api.put(`/tasks/${id}`, payload)
+    return normalizeTask(response.data)
+  },
+
   delete: async (id) => {
     const response = await api.delete(`/tasks/${id}`)
     return response.data

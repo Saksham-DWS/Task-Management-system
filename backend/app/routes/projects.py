@@ -712,6 +712,11 @@ async def update_project(
     raw_input = project_data.model_dump(exclude_none=True)
     incoming_access_ids = incoming.pop("accessUserIds", incoming.pop("access_user_ids", None))
     incoming_collaborator_ids = incoming.pop("collaboratorIds", incoming.pop("collaborator_ids", None))
+    incoming_group_id = incoming.pop("groupId", incoming.pop("group_id", None))
+    if incoming_group_id is None:
+        incoming_group_id = raw_input.get("group_id") or raw_input.get("groupId")
+    if incoming_group_id is None:
+        incoming_group_id = getattr(project_data, "group_id", None)
 
     field_labels = {
         "name": "Name",
@@ -763,6 +768,41 @@ async def update_project(
     actor_role = current_user.get("role", "user").capitalize()
     actor_name = current_user.get("name", "Unknown")
     actor_display = f"{actor_role} {actor_name}".strip()
+
+    if incoming_group_id is not None:
+        role = current_user.get("role", "user")
+        if role not in ["admin", "super_admin"]:
+            raise HTTPException(status_code=403, detail="Only admins can move projects between groups")
+        new_group_id = str(incoming_group_id or "").strip()
+        if not new_group_id:
+            raise HTTPException(status_code=400, detail="Group id is required")
+        existing_group_id = str(existing.get("group_id") or "")
+        if new_group_id != existing_group_id:
+            groups = get_groups_collection()
+            try:
+                new_group = await groups.find_one({"_id": ObjectId(new_group_id)}, {"name": 1})
+            except Exception:
+                new_group = None
+            if not new_group:
+                raise HTTPException(status_code=404, detail="Group not found")
+            old_group_name = None
+            if existing_group_id:
+                try:
+                    old_group = await groups.find_one({"_id": ObjectId(existing_group_id)}, {"name": 1})
+                except Exception:
+                    old_group = None
+                if old_group:
+                    old_group_name = old_group.get("name")
+            new_group_name = new_group.get("name") or new_group_id
+            set_data["group_id"] = new_group_id
+            changes.append({
+                "field": "Group",
+                "before": old_group_name or existing_group_id or "None",
+                "after": new_group_name
+            })
+            descriptions.append(f"{actor_display} moved this project to group {new_group_name}")
+            tasks = get_tasks_collection()
+            await tasks.update_many({"project_id": project_id}, {"$set": {"group_id": new_group_id}})
 
     for raw_key, value in incoming.items():
         key = normalize_key(raw_key)

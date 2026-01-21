@@ -26,7 +26,9 @@ import {
   Tooltip
 } from 'recharts'
 import AccessMultiSelect from '../../components/Inputs/AccessMultiSelect'
+import FilterMultiSelect from '../../components/Inputs/FilterMultiSelect'
 import { goalService } from '../../services/goal.service'
+import { projectService } from '../../services/project.service'
 import api from '../../services/api'
 import { useAuthStore } from '../../store/auth.store'
 import { useAccess } from '../../hooks/useAccess'
@@ -48,7 +50,8 @@ import {
 
 const TAB_OPTIONS = [
   { id: 'my', label: 'My Goals' },
-  { id: 'assigned', label: 'Assigned by Me' }
+  { id: 'assigned', label: 'Assigned by Me' },
+  { id: 'project', label: 'Project level' }
 ]
 
 const STATUS_FILTERS = [
@@ -171,6 +174,13 @@ const buildGoalTimelineEntries = (goal) => {
   return entries.sort((a, b) => toTimestamp(a.timestamp) - toTimestamp(b.timestamp))
 }
 
+const getProjectGoalStatus = (goal) => {
+  if (!goal) return GOAL_STATUS.PENDING
+  if (goal.status) return goal.status
+  if (goal.achieved_at || goal.achievedAt) return GOAL_STATUS.ACHIEVED
+  return GOAL_STATUS.PENDING
+}
+
 export default function Goals() {
   const { user } = useAuthStore()
   const { isAdmin } = useAccess()
@@ -190,6 +200,9 @@ export default function Goals() {
   const [actionState, setActionState] = useState(null)
   const [commentState, setCommentState] = useState(null)
   const [expandedDescriptions, setExpandedDescriptions] = useState({})
+  const [projectGoalsProjects, setProjectGoalsProjects] = useState([])
+  const [projectGoalsLoading, setProjectGoalsLoading] = useState(false)
+  const [selectedProjectIds, setSelectedProjectIds] = useState([])
 
   const assignMonthOptions = useMemo(() => buildMonthRange(new Date(), 12), [])
 
@@ -231,6 +244,22 @@ export default function Goals() {
     loadUsers()
   }, [])
 
+  useEffect(() => {
+    if (activeTab !== 'project') return
+    const loadProjects = async () => {
+      setProjectGoalsLoading(true)
+      try {
+        const projects = await projectService.getAll()
+        setProjectGoalsProjects(projects)
+      } catch (error) {
+        console.error('Failed to load project goals:', error)
+      } finally {
+        setProjectGoalsLoading(false)
+      }
+    }
+    loadProjects()
+  }, [activeTab])
+
   const assignableUsers = useMemo(() => {
     if (!currentUserId) return []
     if (canAssignAny) return users
@@ -239,7 +268,7 @@ export default function Goals() {
     return [{ _id: currentUserId, name: user?.name || 'Me', email: user?.email }]
   }, [canAssignAny, currentUserId, user?.email, user?.name, users])
 
-  const goalsForTab = activeTab === 'my' ? goalsMy : goalsAssigned
+  const goalsForTab = activeTab === 'my' ? goalsMy : activeTab === 'assigned' ? goalsAssigned : []
 
   const monthOptions = useMemo(() => {
     const values = new Set()
@@ -383,6 +412,51 @@ export default function Goals() {
     }))
   }, [filteredGoals])
   const shouldScrollGoalTimelines = goalTimelines.length > 4
+
+  const projectOptions = useMemo(() => {
+    return projectGoalsProjects
+      .map((project) => {
+        const projectId = String(project?._id || project?.id || '')
+        if (!projectId) return null
+        return {
+          id: projectId,
+          label: project?.name || 'Untitled project'
+        }
+      })
+      .filter(Boolean)
+  }, [projectGoalsProjects])
+
+  const projectGoalCards = useMemo(() => {
+    if (selectedProjectIds.length === 0) return []
+    const selectedSet = new Set(selectedProjectIds)
+    const cards = []
+    projectGoalsProjects.forEach((project) => {
+      const projectId = String(project?._id || project?.id || '')
+      if (!projectId || !selectedSet.has(projectId)) return
+      const goals = project.weeklyGoals || project.weekly_goals || []
+      goals.forEach((goal) => {
+        cards.push({
+          ...goal,
+          projectId,
+          projectName: project?.name || 'Project'
+        })
+      })
+    })
+    return cards
+  }, [projectGoalsProjects, selectedProjectIds])
+
+  const filteredProjectGoals = useMemo(() => {
+    if (statusFilter === 'all') return projectGoalCards
+    return projectGoalCards.filter((goal) => getProjectGoalStatus(goal) === statusFilter)
+  }, [projectGoalCards, statusFilter])
+
+  const sortedProjectGoals = useMemo(() => {
+    return [...filteredProjectGoals].sort((a, b) => {
+      const aTimestamp = toTimestamp(a.created_at || a.createdAt)
+      const bTimestamp = toTimestamp(b.created_at || b.createdAt)
+      return bTimestamp - aTimestamp
+    })
+  }, [filteredProjectGoals])
 
   const updateGoalLists = (updatedGoal) => {
     setGoalsMy((prev) => prev.map((goal) => (goal.id === updatedGoal.id ? updatedGoal : goal)))
@@ -976,6 +1050,141 @@ export default function Goals() {
               </div>
             </div>
           </div>
+        </>
+      )}
+
+      {activeTab === 'project' && (
+        <>
+          <div className="card space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-2">
+                <Target className="text-blue-600" size={18} />
+                <h3 className="font-semibold text-gray-900 dark:text-white">
+                  Project level Goals & Achievements
+                </h3>
+              </div>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {sortedProjectGoals.length} goals
+              </span>
+            </div>
+            <FilterMultiSelect
+              label="Select Project to view goals"
+              items={projectOptions}
+              selectedIds={selectedProjectIds}
+              onChange={setSelectedProjectIds}
+              placeholder="Select projects..."
+              searchPlaceholder="Search projects..."
+              emptyLabel="No projects available"
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-gray-500 dark:text-gray-400">Status:</span>
+              {STATUS_FILTERS.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setStatusFilter(item.id)}
+                  className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
+                    statusFilter === item.id
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+                  }`}
+                  type="button"
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {projectGoalsLoading ? (
+            <div className="flex items-center justify-center h-40">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {projectOptions.length === 0 && (
+                <div className="card text-center text-gray-500 dark:text-gray-400 lg:col-span-2">
+                  No projects available for your access.
+                </div>
+              )}
+              {projectOptions.length > 0 && selectedProjectIds.length === 0 && (
+                <div className="card text-center text-gray-500 dark:text-gray-400 lg:col-span-2">
+                  Select a project to view project-level goals.
+                </div>
+              )}
+              {selectedProjectIds.length > 0 && sortedProjectGoals.length === 0 && (
+                <div className="card text-center text-gray-500 dark:text-gray-400 lg:col-span-2">
+                  No goals found for the selected projects.
+                </div>
+              )}
+              {sortedProjectGoals.map((goal) => {
+                const status = getProjectGoalStatus(goal)
+                const isAchieved = status === GOAL_STATUS.ACHIEVED
+                const statusClass = GOAL_STATUS_COLORS[status] || 'bg-gray-100 text-gray-600'
+                const statusLabel = GOAL_STATUS_LABELS[status] || status
+                const createdAtLabel = formatDateTime(goal.created_at || goal.createdAt) || 'Unknown date'
+                const createdBy = goal.created_by_name || goal.createdByName || 'Unknown'
+                const achievedBy = goal.achieved_by_name || goal.achievedByName || 'Unknown'
+                const achievedAtLabel = formatDateTime(goal.achieved_at || goal.achievedAt)
+                const goalText = goal.text || goal.goal || 'Project goal'
+                const goalKey = goal.id !== undefined && goal.id !== null
+                  ? `${goal.projectId}-${goal.id}`
+                  : `${goal.projectId}-${goal.created_at || goal.createdAt || goalText}`
+                return (
+                  <div key={goalKey} className="card h-full flex flex-col">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Project:{' '}
+                        <span className="font-medium text-gray-700 dark:text-gray-200">
+                          {goal.projectName || 'Project'}
+                        </span>
+                      </p>
+                      <span className={`px-2 py-1 text-xs rounded-full ${statusClass}`}>
+                        {statusLabel}
+                      </span>
+                    </div>
+                    <div className="mt-3 flex items-start gap-2">
+                      <Flag size={16} className="text-blue-600 mt-0.5" />
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white break-words">
+                        {goalText}
+                      </p>
+                    </div>
+                    <div className="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                      <div className="flex items-center gap-2">
+                        <User size={14} className="text-gray-400" />
+                        <span>
+                          Added by:{' '}
+                          <span className="font-medium text-gray-700 dark:text-gray-200">
+                            {createdBy}
+                          </span>
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Calendar size={14} className="text-gray-400" />
+                        <span>
+                          Added on:{' '}
+                          <span className="font-medium text-gray-700 dark:text-gray-200">
+                            {createdAtLabel}
+                          </span>
+                        </span>
+                      </div>
+                      {isAchieved && (
+                        <div className="flex items-center gap-2 text-emerald-600">
+                          <CheckCircle2 size={14} className="text-emerald-500" />
+                          <span>
+                            Achieved by:{' '}
+                            <span className="font-medium">
+                              {achievedBy}
+                            </span>
+                            {achievedAtLabel ? ` on ${achievedAtLabel}` : ''}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </>
       )}
 
